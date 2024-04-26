@@ -16,17 +16,17 @@ import (
 )
 
 var ChallengerNodeCmd = &cli.Command{
-	Name:  "challenger",
-	Usage: "meeda store node",
+	Name:  "light",
+	Usage: "meeda light node",
 	Subcommands: []*cli.Command{
-		challengerNodeRunCmd,
+		lightNodeRunCmd,
 		// challengerNodeStopCmd,
 	},
 }
 
-var challengerNodeRunCmd = &cli.Command{
+var lightNodeRunCmd = &cli.Command{
 	Name:  "run",
-	Usage: "run meeda challenger node",
+	Usage: "run meeda light node",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:    "endpoint",
