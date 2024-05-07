@@ -26,7 +26,7 @@ func LoadStoreModule(g *gin.RouterGroup) {
 	g.GET("/getObject", getObjectHandler)
 	g.POST("/putObject", putObjectHandler)
 	g.GET("/warmup", warmupHandler)
-	fmt.Println("load store moudle success!")
+	fmt.Println("load store node moudle success!")
 }
 
 func getObjectHandler(c *gin.Context) {
@@ -125,6 +125,7 @@ func putObjectHandler(c *gin.Context) {
 		return
 	}
 
+	// 记录commit => mid的映射
 	var fileInfo = database.DAFileIDInfo{
 		Commit: commit,
 		Mid:    oi.Cid,

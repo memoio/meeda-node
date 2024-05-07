@@ -10,6 +10,7 @@ require (
 	github.com/memoio/did-solidity v0.0.0-00010101000000-000000000000
 	github.com/memoio/go-did v0.0.0-00010101000000-000000000000
 	github.com/memoio/go-mefs-v2 v0.0.0-00010101000000-000000000000
+	github.com/mitchellh/go-homedir v1.1.0
 	github.com/urfave/cli/v2 v2.27.1
 	go.uber.org/zap v1.27.0
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2
@@ -81,7 +82,6 @@ require (
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b // indirect
 	github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1 // indirect
 	github.com/minio/sha256-simd v1.0.0 // indirect
-	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect

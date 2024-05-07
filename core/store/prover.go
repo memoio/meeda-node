@@ -73,7 +73,6 @@ func (p *DataAvailabilityProver) ProveDataAccess(ctx context.Context) {
 			return
 		case <-time.After(wait):
 		}
-		// time.Sleep(wait)
 
 		p.resetChallengeStatus()
 
@@ -99,14 +98,7 @@ func (p *DataAvailabilityProver) ProveDataAccess(ctx context.Context) {
 			continue
 		}
 
-		// commits, proofs, err := p.selectFiles(nowRnd)
-		// if err != nil {
-		// 	logger.Error(err.Error())
-		// 	proveSuccess = false
-		// 	continue
-		// }
-
-		commits, proofs, err := p.generateFraudProof(nowRnd)
+		commits, proofs, err := p.selectFiles(nowRnd)
 		if err != nil {
 			logger.Error(err.Error())
 			proveSuccess = false
@@ -245,77 +237,77 @@ func (p *DataAvailabilityProver) selectFiles(rnd fr.Element) ([]bls12381.G1Affin
 	return commits, proofs, nil
 }
 
-func (p *DataAvailabilityProver) generateFraudProof(rnd fr.Element) ([]bls12381.G1Affine, []kzg.OpeningProof, error) {
-	var commits []bls12381.G1Affine = make([]bls12381.G1Affine, p.selectedFileNumber)
-	var proofs []kzg.OpeningProof = make([]kzg.OpeningProof, p.selectedFileNumber)
-	info, err := p.proofInstance.GetChallengeInfo()
-	if err != nil {
-		return nil, nil, err
-	}
-	length := info.ChalLength.Int64()
+// func (p *DataAvailabilityProver) generateFraudProof(rnd fr.Element) ([]bls12381.G1Affine, []kzg.OpeningProof, error) {
+// 	var commits []bls12381.G1Affine = make([]bls12381.G1Affine, p.selectedFileNumber)
+// 	var proofs []kzg.OpeningProof = make([]kzg.OpeningProof, p.selectedFileNumber)
+// 	info, err := p.proofInstance.GetChallengeInfo()
+// 	if err != nil {
+// 		return nil, nil, err
+// 	}
+// 	length := info.ChalLength.Int64()
 
-	rndBytes, err := p.proofInstance.GetRndRawBytes()
-	if err != nil {
-		return nil, nil, err
-	}
+// 	rndBytes, err := p.proofInstance.GetRndRawBytes()
+// 	if err != nil {
+// 		return nil, nil, err
+// 	}
 
-	var random *big.Int = big.NewInt(0).SetBytes(rndBytes[:])
-	random = new(big.Int).Mod(random, big.NewInt(length))
-	startIndex := new(big.Int).Div(random, big.NewInt(2)).Int64()
+// 	var random *big.Int = big.NewInt(0).SetBytes(rndBytes[:])
+// 	random = new(big.Int).Mod(random, big.NewInt(length))
+// 	startIndex := new(big.Int).Div(random, big.NewInt(2)).Int64()
 
-	var endIndex int64
-	if p.selectedFileNumber > length {
-		endIndex = startIndex + (length-1)/2
-	} else {
-		endIndex = startIndex + (p.selectedFileNumber-1)/2
-	}
+// 	var endIndex int64
+// 	if p.selectedFileNumber > length {
+// 		endIndex = startIndex + (length-1)/2
+// 	} else {
+// 		endIndex = startIndex + (p.selectedFileNumber-1)/2
+// 	}
 
-	files, err := database.GetRangeDAFileInfo(uint(startIndex+1), uint(endIndex+1))
-	if err != nil {
-		return nil, nil, err
-	}
+// 	files, err := database.GetRangeDAFileInfo(uint(startIndex+1), uint(endIndex+1))
+// 	if err != nil {
+// 		return nil, nil, err
+// 	}
 
-	var tmpCommits = make([]bls12381.G1Affine, len(files))
-	var tmpProofs = make([]kzg.OpeningProof, len(files))
-	for index, file := range files {
-		if file.Expiration > p.last {
-			var w bytes.Buffer
-			id, err := database.GetFileIDInfoByCommit(file.Commit)
-			if err != nil {
-				return nil, nil, err
-			}
+// 	var tmpCommits = make([]bls12381.G1Affine, len(files))
+// 	var tmpProofs = make([]kzg.OpeningProof, len(files))
+// 	for index, file := range files {
+// 		if file.Expiration > p.last {
+// 			var w bytes.Buffer
+// 			id, err := database.GetFileIDInfoByCommit(file.Commit)
+// 			if err != nil {
+// 				return nil, nil, err
+// 			}
 
-			err = daStore.GetObject(context.TODO(), id.Mid, &w, gateway.ObjectOptions{})
-			if err != nil {
-				return nil, nil, err
-			}
+// 			err = daStore.GetObject(context.TODO(), id.Mid, &w, gateway.ObjectOptions{})
+// 			if err != nil {
+// 				return nil, nil, err
+// 			}
 
-			poly := split(w.Bytes())
-			proof, err := kzg.Open(poly, rnd, p.provingKey)
-			if err != nil {
-				return nil, nil, err
-			}
+// 			poly := split(w.Bytes())
+// 			proof, err := kzg.Open(poly, rnd, p.provingKey)
+// 			if err != nil {
+// 				return nil, nil, err
+// 			}
 
-			tmpCommits[index] = file.Commit
-			tmpProofs[index] = proof
-		} else {
-			tmpCommits[index] = zeroCommit
-			tmpProofs[index] = zeroProof
-		}
-	}
+// 			tmpCommits[index] = file.Commit
+// 			tmpProofs[index] = proof
+// 		} else {
+// 			tmpCommits[index] = zeroCommit
+// 			tmpProofs[index] = zeroProof
+// 		}
+// 	}
 
-	for index := 0; index < int(p.selectedFileNumber); index++ {
-		if index != 999991 {
-			commits[index] = tmpCommits[index%int(length)/2]
-			proofs[index] = tmpProofs[index%int(length)/2]
-		} else {
-			commits[index] = zeroCommit
-			proofs[index] = zeroProof
-		}
-	}
+// 	for index := 0; index < int(p.selectedFileNumber); index++ {
+// 		if index != 999991 {
+// 			commits[index] = tmpCommits[index%int(length)/2]
+// 			proofs[index] = tmpProofs[index%int(length)/2]
+// 		} else {
+// 			commits[index] = zeroCommit
+// 			proofs[index] = zeroProof
+// 		}
+// 	}
 
-	return commits, proofs, nil
-}
+// 	return commits, proofs, nil
+// }
 
 func (p *DataAvailabilityProver) proveToContract(commits []bls12381.G1Affine, proofs []kzg.OpeningProof, rnd fr.Element) error {
 	// fold proof

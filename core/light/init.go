@@ -1,4 +1,4 @@
-package challenger
+package light
 
 import (
 	"crypto/ecdsa"
@@ -10,13 +10,13 @@ import (
 )
 
 var baseUrl = "localhost:8081"
-var logger = logs.Logger("challenger node")
+var logger = logs.Logger("light node")
 var zeroCommit bls12381.G1Affine
 var zeroProof kzg.OpeningProof
 var userSk *ecdsa.PrivateKey
 var proofInstance *proof.ProofInstance
 
-func InitChallengerNode(sk *ecdsa.PrivateKey) error {
+func InitLightNode(sk *ecdsa.PrivateKey) error {
 	userSk = sk
 
 	zeroCommit.X.SetZero()

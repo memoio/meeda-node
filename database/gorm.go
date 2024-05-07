@@ -1,9 +1,12 @@
 package database
 
 import (
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/memoio/meeda-node/logs"
+	"github.com/mitchellh/go-homedir"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -12,7 +15,19 @@ var GlobalDataBase *gorm.DB
 var logger = logs.Logger("database")
 
 func init() {
-	db, err := gorm.Open(sqlite.Open("backend.db"), &gorm.Config{})
+	dir, err := homedir.Expand("~/.meeda-store")
+	if err != nil {
+		panic(err)
+	}
+
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		err := os.MkdirAll(dir, 0666)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	db, err := gorm.Open(sqlite.Open(filepath.Join(dir, "meeda.db")), &gorm.Config{})
 	if err != nil {
 		logger.Panicf("Failed to connect to database: %s", err.Error())
 	}

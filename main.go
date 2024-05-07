@@ -10,7 +10,7 @@ import (
 
 func main() {
 	local := make([]*cli.Command, 0, 1)
-	local = append(local, cmd.StoreNodeCmd, cmd.ChallengerNodeCmd)
+	local = append(local, cmd.StoreNodeCmd, cmd.LightNodeCmd, cmd.VersionCmd)
 	app := cli.App{
 		Commands: local,
 		Flags: []cli.Flag{
@@ -22,7 +22,7 @@ func main() {
 		},
 		Action: func(ctx *cli.Context) error {
 			if ctx.Bool("version") {
-				fmt.Println("v0.0.1")
+				fmt.Println(cmd.Version + "+" + cmd.BuildFlag)
 			}
 			return nil
 		},

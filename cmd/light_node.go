@@ -11,11 +11,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
 	"github.com/memoio/meeda-node/core"
-	"github.com/memoio/meeda-node/core/challenger"
+	"github.com/memoio/meeda-node/core/light"
 	"github.com/urfave/cli/v2"
 )
 
-var ChallengerNodeCmd = &cli.Command{
+var LightNodeCmd = &cli.Command{
 	Name:  "light",
 	Usage: "meeda light node",
 	Subcommands: []*cli.Command{
@@ -55,7 +55,7 @@ var lightNodeRunCmd = &cli.Command{
 		cctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		err = challenger.InitChallengerNode(privateKey)
+		err = light.InitLightNode(privateKey)
 		if err != nil {
 			return err
 		}
@@ -71,13 +71,13 @@ var lightNodeRunCmd = &cli.Command{
 		}
 		go dumper.SubscribeFileProof(cctx)
 
-		challenger, err := challenger.NewDataAvailabilityChallenger("dev", privateKey)
+		challenger, err := light.NewDataAvailabilityChallenger("dev", privateKey)
 		if err != nil {
 			return err
 		}
 		go challenger.ChallengeAggregatedCommits(cctx)
 
-		srv, err := NewChallengerServer(endPoint)
+		srv, err := NewLightServer(endPoint)
 		if err != nil {
 			log.Fatalf("new store node server: %s\n", err)
 		}
@@ -103,7 +103,7 @@ var lightNodeRunCmd = &cli.Command{
 	},
 }
 
-func NewChallengerServer(endpoint string) (*http.Server, error) {
+func NewLightServer(endpoint string) (*http.Server, error) {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
@@ -111,7 +111,7 @@ func NewChallengerServer(endpoint string) (*http.Server, error) {
 	router.GET("/", func(c *gin.Context) {
 		c.String(http.StatusOK, "Welcome Server")
 	})
-	challenger.LoadChallengerModule(router.Group("/"))
+	light.LoadLightModule(router.Group("/"))
 
 	return &http.Server{
 		Addr:    endpoint,

@@ -1,4 +1,4 @@
-package challenger
+package light
 
 import (
 	"context"

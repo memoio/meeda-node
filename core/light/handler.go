@@ -1,4 +1,4 @@
-package challenger
+package light
 
 import (
 	"bytes"
@@ -19,12 +19,12 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func LoadChallengerModule(g *gin.RouterGroup) {
+func LoadLightModule(g *gin.RouterGroup) {
 	g.GET("/getObject", getObjectHandler)
 	g.POST("/putObject", putObjectHandler)
 	g.GET("/getObjectInfo", getObjectInfoHandler)
 	g.GET("/getProofInfo", getProofInfoHandler)
-	fmt.Println("load challenger moudle success!")
+	fmt.Println("load light node moudle success!")
 }
 
 func getObjectHandler(c *gin.Context) {
@@ -132,14 +132,43 @@ func getObjectInfoHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"commit":     id,
+		"id":         id,
 		"size":       info.Size,
 		"expiration": info.Expiration,
 	})
 }
 
 func getProofInfoHandler(c *gin.Context) {
+	id := c.Query("id")
+	if len(id) == 0 {
+		lerr := logs.ServerError{Message: "object's id is not set"}
+		c.Error(lerr)
+		return
+	}
 
+	var commit bls12381.G1Affine
+	idBytes, err := hexutil.Decode(id)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	err = commit.Unmarshal(idBytes)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	info, err := database.GetFileInfoByCommit(commit)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":                  id,
+		"chooseNuber":         info.ChooseNumber,
+		"provedSuccessNumber": info.ProvedSuccessNumber,
+	})
 }
 
 func getObjectFromStoreNode(url string, id string) ([]byte, error) {
