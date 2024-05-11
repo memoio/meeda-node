@@ -39,10 +39,16 @@ var lightNodeRunCmd = &cli.Command{
 			Usage: "input your private key",
 			Value: "",
 		},
+		&cli.StringFlag{
+			Name:  "chain",
+			Usage: "input chain name, e.g.(dev)",
+			Value: "dev",
+		},
 	},
 	Action: func(ctx *cli.Context) error {
 		endPoint := ctx.String("endpoint")
 		sk := ctx.String("sk")
+		chain := ctx.String("chain")
 
 		privateKey, err := crypto.HexToECDSA(sk)
 		if err != nil {
@@ -55,12 +61,12 @@ var lightNodeRunCmd = &cli.Command{
 		cctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		err = light.InitLightNode(privateKey)
+		err = light.InitLightNode(chain, privateKey)
 		if err != nil {
 			return err
 		}
 
-		dumper, err := core.NewDataAvailabilityDumper("dev")
+		dumper, err := core.NewDataAvailabilityDumper(chain)
 		if err != nil {
 			return err
 		}
@@ -71,7 +77,7 @@ var lightNodeRunCmd = &cli.Command{
 		}
 		go dumper.SubscribeFileProof(cctx)
 
-		challenger, err := light.NewDataAvailabilityChallenger("dev", privateKey)
+		challenger, err := light.NewDataAvailabilityChallenger(chain, privateKey)
 		if err != nil {
 			return err
 		}

@@ -39,10 +39,16 @@ var storeNodeRunCmd = &cli.Command{
 			Usage: "input your private key",
 			Value: "",
 		},
+		&cli.StringFlag{
+			Name:  "chain",
+			Usage: "input chain name, e.g.(dev)",
+			Value: "dev",
+		},
 	},
 	Action: func(ctx *cli.Context) error {
 		endPoint := ctx.String("endpoint")
 		sk := ctx.String("sk")
+		chain := ctx.String("chain")
 
 		privateKey, err := crypto.HexToECDSA(sk)
 		if err != nil {
@@ -55,12 +61,12 @@ var storeNodeRunCmd = &cli.Command{
 		cctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		err = store.InitStoreNode(privateKey)
+		err = store.InitStoreNode(chain, privateKey)
 		if err != nil {
 			return err
 		}
 
-		dumper, err := core.NewDataAvailabilityDumper("dev")
+		dumper, err := core.NewDataAvailabilityDumper(chain)
 		if err != nil {
 			return err
 		}
@@ -71,7 +77,7 @@ var storeNodeRunCmd = &cli.Command{
 		}
 		go dumper.SubscribeFileProof(cctx)
 
-		prover, err := store.NewDataAvailabilityProver("dev", privateKey)
+		prover, err := store.NewDataAvailabilityProver(chain, privateKey)
 		if err != nil {
 			log.Fatalf("new store node prover: %s\n", err)
 		}

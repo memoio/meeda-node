@@ -54,12 +54,6 @@ func putObjectHandler(c *gin.Context) {
 		c.Error(lerr)
 		return
 	}
-	from, ok := body["from"].(string)
-	if !ok {
-		lerr := logs.ServerError{Message: "field 'from' is not set"}
-		c.Error(lerr)
-		return
-	}
 
 	databyte, err := hex.DecodeString(data)
 	if err != nil {
@@ -68,7 +62,7 @@ func putObjectHandler(c *gin.Context) {
 		return
 	}
 
-	result, err := putObjectIntoStoreNode(baseUrl, databyte, from)
+	result, err := putObjectIntoStoreNode(baseUrl, databyte, userAddr.String())
 	if err != nil {
 		lerr := logs.ServerError{Message: "Error when calling store node api"}
 		c.Error(lerr)

@@ -15,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
-	proof "github.com/memoio/go-did/file-proof"
 	"github.com/memoio/meeda-node/database"
 	"github.com/memoio/meeda-node/gateway"
 	"github.com/memoio/meeda-node/logs"
@@ -114,11 +113,7 @@ func putObjectHandler(c *gin.Context) {
 
 	start := time.Now()
 	end := start.Add(defaultExpiration)
-	hash, err := proof.GetCredentialHash("dev", common.HexToAddress(from), commit, uint64(oi.Size), big.NewInt(start.Unix()), big.NewInt(end.Unix()))
-	if err != nil {
-		c.Error(err)
-		return
-	}
+	hash := defaultProofInstance.GetCredentialHash(common.HexToAddress(from), commit, uint64(oi.Size), big.NewInt(start.Unix()), big.NewInt(end.Unix()))
 	signature, err := crypto.Sign(hash, submitterSk)
 	if err != nil {
 		c.Error(err)
