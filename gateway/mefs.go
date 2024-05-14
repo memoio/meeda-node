@@ -57,6 +57,34 @@ func NewGateway() (IGateway, error) {
 	}, nil
 }
 
+func CreateGateWay(api, token string) (IGateway, error) {
+	addr, headers, err := mclient.CreateMemoClientInfo(api, token)
+	if err != nil {
+		lerr := logs.StorageError{Message: err.Error()}
+		logger.Error(lerr)
+		return nil, lerr
+	}
+	napi, closer, err := mclient.NewUserNode(context.Background(), addr, headers)
+	if err != nil {
+		lerr := logs.StorageError{Message: err.Error()}
+		logger.Error(lerr)
+		return nil, lerr
+	}
+	defer closer()
+	_, err = napi.ShowStorage(context.Background())
+	if err != nil {
+		lerr := logs.StorageError{Message: err.Error()}
+		logger.Error(lerr)
+		return nil, lerr
+	}
+
+	return &Mefs{
+		st:      MEFS,
+		addr:    addr,
+		headers: headers,
+	}, nil
+}
+
 func (m *Mefs) GetStoreType(ctx context.Context) StorageType {
 	return m.st
 }

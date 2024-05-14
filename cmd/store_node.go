@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/memoio/meeda-node/core"
 	"github.com/memoio/meeda-node/core/store"
+	"github.com/memoio/meeda-node/database"
 	"github.com/urfave/cli/v2"
 )
 
@@ -42,13 +43,25 @@ var storeNodeRunCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "chain",
 			Usage: "input chain name, e.g.(dev)",
-			Value: "dev",
+			Value: "product",
+		},
+		&cli.StringFlag{
+			Name:  "ip",
+			Usage: "input mefs user's ip",
+			Value: "",
+		},
+		&cli.StringFlag{
+			Name:  "token",
+			Usage: "input mefs user's token",
+			Value: "",
 		},
 	},
 	Action: func(ctx *cli.Context) error {
 		endPoint := ctx.String("endpoint")
 		sk := ctx.String("sk")
 		chain := ctx.String("chain")
+		ip := ctx.String("ip")
+		token := ctx.String("token")
 
 		privateKey, err := crypto.HexToECDSA(sk)
 		if err != nil {
@@ -61,7 +74,11 @@ var storeNodeRunCmd = &cli.Command{
 		cctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		err = store.InitStoreNode(chain, privateKey)
+		err = store.InitStoreNode(chain, privateKey, ip, token)
+		if err != nil {
+			return err
+		}
+		err = database.InitDatabase("~/.meeda-store")
 		if err != nil {
 			return err
 		}

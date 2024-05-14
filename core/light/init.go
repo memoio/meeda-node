@@ -11,7 +11,7 @@ import (
 	"github.com/memoio/meeda-node/logs"
 )
 
-var baseUrl = "localhost:8081"
+var baseUrl string
 var logger = logs.Logger("light node")
 var zeroCommit bls12381.G1Affine
 var zeroProof kzg.OpeningProof
@@ -19,7 +19,7 @@ var userSk *ecdsa.PrivateKey
 var userAddr common.Address
 var proofInstance *proof.ProofInstance
 
-func InitLightNode(chain string, sk *ecdsa.PrivateKey) error {
+func InitLightNode(chain string, sk *ecdsa.PrivateKey, ip string) error {
 	userSk = sk
 	userAddr = crypto.PubkeyToAddress(userSk.PublicKey)
 
@@ -35,6 +35,8 @@ func InitLightNode(chain string, sk *ecdsa.PrivateKey) error {
 	if err != nil {
 		return err
 	}
+
+	baseUrl = ip
 
 	return nil
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/memoio/meeda-node/core"
 	"github.com/memoio/meeda-node/core/light"
+	"github.com/memoio/meeda-node/database"
 	"github.com/urfave/cli/v2"
 )
 
@@ -42,13 +43,19 @@ var lightNodeRunCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "chain",
 			Usage: "input chain name, e.g.(dev)",
-			Value: "dev",
+			Value: "product",
+		},
+		&cli.StringFlag{
+			Name:  "ip",
+			Usage: "input meeda store node's ip address",
+			Value: "http://localhost:8081",
 		},
 	},
 	Action: func(ctx *cli.Context) error {
 		endPoint := ctx.String("endpoint")
 		sk := ctx.String("sk")
 		chain := ctx.String("chain")
+		ip := ctx.String("ip")
 
 		privateKey, err := crypto.HexToECDSA(sk)
 		if err != nil {
@@ -61,7 +68,11 @@ var lightNodeRunCmd = &cli.Command{
 		cctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		err = light.InitLightNode(chain, privateKey)
+		err = light.InitLightNode(chain, privateKey, ip)
+		if err != nil {
+			return err
+		}
+		err = database.InitDatabase("~/.meeda-light")
 		if err != nil {
 			return err
 		}

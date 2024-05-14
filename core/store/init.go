@@ -24,17 +24,22 @@ var defaultDABucket string = "da-bucket"
 var defaultDAObject string = "da-txdata"
 var defaultExpiration time.Duration = 7 * 24 * time.Hour
 
-func InitStoreNode(chain string, sk *ecdsa.PrivateKey) error {
-	// ui := api.USerInfo{
-	// 	Api:   config.Cfg.Storage.Mefs.Api,
-	// 	Token: config.Cfg.Storage.Mefs.Token,
-	// }
-	store, err := gateway.NewGateway()
-	if err != nil {
-		return err
+func InitStoreNode(chain string, sk *ecdsa.PrivateKey, api, token string) error {
+	if api == "" {
+		store, err := gateway.NewGateway()
+		if err != nil {
+			return err
+		}
+		daStore = store
+	} else {
+		store, err := gateway.CreateGateWay(api, token)
+		if err != nil {
+			return err
+		}
+		daStore = store
 	}
-	daStore = store
 
+	var err error
 	DefaultSRS, err = kzg.NewSRS(4*1024, big.NewInt(985))
 	if err != nil {
 		return err

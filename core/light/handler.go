@@ -11,7 +11,6 @@ import (
 	"time"
 
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gin-gonic/gin"
 	"github.com/memoio/meeda-node/database"
 	"github.com/memoio/meeda-node/logs"
@@ -31,14 +30,16 @@ func getObjectHandler(c *gin.Context) {
 	id := c.Query("id")
 	if len(id) == 0 {
 		lerr := logs.ServerError{Message: "object's id is not set"}
-		c.Error(lerr)
+		errRes := logs.ToAPIErrorCode(lerr)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
 	data, err := getObjectFromStoreNode(baseUrl, id)
 	if err != nil {
 		lerr := logs.ServerError{Message: "get object from store node failed"}
-		c.Error(lerr)
+		errRes := logs.ToAPIErrorCode(lerr)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
@@ -51,46 +52,45 @@ func putObjectHandler(c *gin.Context) {
 	data, ok := body["data"].(string)
 	if !ok {
 		lerr := logs.ServerError{Message: "field 'data' is not set"}
-		c.Error(lerr)
+		errRes := logs.ToAPIErrorCode(lerr)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
 	databyte, err := hex.DecodeString(data)
 	if err != nil {
 		lerr := logs.ServerError{Message: "field 'data' is not legally hexadecimal presented"}
-		c.Error(lerr)
+		errRes := logs.ToAPIErrorCode(lerr)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
 	result, err := putObjectIntoStoreNode(baseUrl, databyte, userAddr.String())
 	if err != nil {
 		lerr := logs.ServerError{Message: "Error when calling store node api"}
-		c.Error(lerr)
+		errRes := logs.ToAPIErrorCode(lerr)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
-	var commit bls12381.G1Affine
-	commitBytes, err := hex.DecodeString(result.Commit)
+	commit, err := decodeCommit(result.Commit)
 	if err != nil {
-		lerr := logs.ServerError{Message: "commit is not legally hexadecimal presented"}
-		c.Error(lerr)
-		return
-	}
-	err = commit.Unmarshal(commitBytes)
-	if err != nil {
-		c.Error(err)
+		errRes := logs.ToAPIErrorCode(err)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
 	signature, err := hex.DecodeString(result.Signature)
 	if err != nil {
-		c.Error(err)
+		errRes := logs.ToAPIErrorCode(err)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
 	err = proofInstance.AddFile(commit, uint64(result.Size), big.NewInt(result.Start), big.NewInt(result.End), signature)
 	if err != nil {
-		c.Error(err)
+		errRes := logs.ToAPIErrorCode(err)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
@@ -103,25 +103,22 @@ func getObjectInfoHandler(c *gin.Context) {
 	id := c.Query("id")
 	if len(id) == 0 {
 		lerr := logs.ServerError{Message: "object's id is not set"}
-		c.Error(lerr)
+		errRes := logs.ToAPIErrorCode(lerr)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
-	var commit bls12381.G1Affine
-	idBytes, err := hexutil.Decode(id)
+	commit, err := decodeCommit(id)
 	if err != nil {
-		c.Error(err)
-		return
-	}
-	err = commit.Unmarshal(idBytes)
-	if err != nil {
-		c.Error(err)
+		errRes := logs.ToAPIErrorCode(err)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
 	info, err := database.GetFileInfoByCommit(commit)
 	if err != nil {
-		c.Error(err)
+		errRes := logs.ToAPIErrorCode(err)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
@@ -136,25 +133,22 @@ func getProofInfoHandler(c *gin.Context) {
 	id := c.Query("id")
 	if len(id) == 0 {
 		lerr := logs.ServerError{Message: "object's id is not set"}
-		c.Error(lerr)
+		errRes := logs.ToAPIErrorCode(lerr)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
-	var commit bls12381.G1Affine
-	idBytes, err := hexutil.Decode(id)
+	commit, err := decodeCommit(id)
 	if err != nil {
-		c.Error(err)
-		return
-	}
-	err = commit.Unmarshal(idBytes)
-	if err != nil {
-		c.Error(err)
+		errRes := logs.ToAPIErrorCode(err)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
 	info, err := database.GetFileInfoByCommit(commit)
 	if err != nil {
-		c.Error(err)
+		errRes := logs.ToAPIErrorCode(err)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
@@ -238,6 +232,8 @@ func putObjectIntoStoreNode(url string, data []byte, from string) (PutObjectResu
 		return PutObjectResult{}, xerrors.Errorf("Respond code[%d]: %s", res.StatusCode, string(body))
 	}
 
+	logger.Info(string(body))
+
 	var result PutObjectResult
 	err = json.Unmarshal(body, &result)
 	if err != nil {
@@ -245,4 +241,15 @@ func putObjectIntoStoreNode(url string, data []byte, from string) (PutObjectResu
 	}
 
 	return result, nil
+}
+
+func decodeCommit(id string) (bls12381.G1Affine, error) {
+	var commit bls12381.G1Affine
+	commitBytes, err := hex.DecodeString(id)
+	if err != nil {
+		return commit, err
+	}
+	err = commit.Unmarshal(commitBytes)
+
+	return commit, nil
 }

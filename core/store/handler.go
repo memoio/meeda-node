@@ -12,7 +12,6 @@ import (
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr/kzg"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
 	"github.com/memoio/meeda-node/database"
@@ -32,39 +31,42 @@ func getObjectHandler(c *gin.Context) {
 	id := c.Query("id")
 	if len(id) == 0 {
 		lerr := logs.ServerError{Message: "object's id is not set"}
-		c.Error(lerr)
+		errRes := logs.ToAPIErrorCode(lerr)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
-	var commit bls12381.G1Affine
-	idBytes, err := hexutil.Decode(id)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-	err = commit.Unmarshal(idBytes)
-	if err != nil {
-		c.Error(err)
-		return
-	}
+	if len(id) == 96 {
+		commit, err := decodeCommit(id)
+		if err != nil {
+			errRes := logs.ToAPIErrorCode(err)
+			c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
+			return
+		}
 
-	// check if it is submite to contract
-	file, err := database.GetFileInfoByCommit(commit)
-	if err != nil {
-		c.Error(err)
-		return
-	}
+		// check if it is submite to contract
+		file, err := database.GetFileInfoByCommit(commit)
+		if err != nil {
+			errRes := logs.ToAPIErrorCode(err)
+			c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
+			return
+		}
 
-	fileID, err := database.GetFileIDInfoByCommit(file.Commit)
-	if err != nil {
-		c.Error(err)
-		return
+		fileID, err := database.GetFileIDInfoByCommit(file.Commit)
+		if err != nil {
+			errRes := logs.ToAPIErrorCode(err)
+			c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
+			return
+		}
+
+		id = fileID.Mid
 	}
 
 	var w bytes.Buffer
-	err = daStore.GetObject(c.Request.Context(), fileID.Mid, &w, gateway.ObjectOptions{})
+	err := daStore.GetObject(c.Request.Context(), id, &w, gateway.ObjectOptions{})
 	if err != nil {
-		c.Error(err)
+		errRes := logs.ToAPIErrorCode(err)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
@@ -76,21 +78,21 @@ func putObjectHandler(c *gin.Context) {
 	c.BindJSON(&body)
 	data, ok := body["data"].(string)
 	if !ok {
-		lerr := logs.ServerError{Message: "field 'data' is not set"}
-		c.Error(lerr)
+		errRes := logs.ToAPIErrorCode(logs.ServerError{Message: "field 'data' is not set"})
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 	from, ok := body["from"].(string)
 	if !ok {
-		lerr := logs.ServerError{Message: "field 'address' is not set"}
-		c.Error(lerr)
+		errRes := logs.ToAPIErrorCode(logs.ServerError{Message: "field 'from' is not set"})
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
 	databyte, err := hex.DecodeString(data)
 	if err != nil {
-		lerr := logs.ServerError{Message: "field 'data' is not legally hexadecimal presented"}
-		c.Error(lerr)
+		errRes := logs.ToAPIErrorCode(logs.ServerError{Message: "field 'data' is not legally hexadecimal presented"})
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
@@ -99,15 +101,16 @@ func putObjectHandler(c *gin.Context) {
 	var buf *bytes.Buffer = bytes.NewBuffer(databyte)
 	oi, err := daStore.PutObject(c.Request.Context(), defaultDABucket, object, buf, gateway.ObjectOptions{})
 	if err != nil {
-		c.Error(err)
+		errRes := logs.ToAPIErrorCode(err)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
 	elements := split(databyte)
-	// log.Println(string(buf.Bytes()), elements)
 	commit, err := kzg.Commit(elements, DefaultSRS.Pk)
 	if err != nil {
-		c.Error(err)
+		errRes := logs.ToAPIErrorCode(err)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
@@ -116,7 +119,8 @@ func putObjectHandler(c *gin.Context) {
 	hash := defaultProofInstance.GetCredentialHash(common.HexToAddress(from), commit, uint64(oi.Size), big.NewInt(start.Unix()), big.NewInt(end.Unix()))
 	signature, err := crypto.Sign(hash, submitterSk)
 	if err != nil {
-		c.Error(err)
+		errRes := logs.ToAPIErrorCode(err)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
@@ -127,16 +131,17 @@ func putObjectHandler(c *gin.Context) {
 	}
 	err = fileInfo.CreateDAFileIDInfo()
 	if err != nil {
-		c.Error(err)
+		errRes := logs.ToAPIErrorCode(err)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"commit":   hex.EncodeToString(commit.Marshal()),
-		"size":     oi.Size,
-		"start":    start.Unix(),
-		"end":      end.Unix(),
-		"sigature": hex.EncodeToString(signature),
+		"commit":    hex.EncodeToString(commit.Marshal()),
+		"size":      oi.Size,
+		"start":     start.Unix(),
+		"end":       end.Unix(),
+		"signature": hex.EncodeToString(signature),
 	})
 }
 
@@ -145,7 +150,9 @@ func warmupHandler(c *gin.Context) {
 	err := tempStore.MakeBucketWithLocation(c.Request.Context(), defaultDABucket)
 	if err != nil {
 		if !strings.Contains(err.Error(), "already exist") {
-			c.Error(err)
+			errRes := logs.ToAPIErrorCode(err)
+			c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
+			return
 		}
 	} else {
 		logger.Info("Create bucket ", defaultDABucket)
@@ -154,4 +161,15 @@ func warmupHandler(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, nil)
+}
+
+func decodeCommit(id string) (bls12381.G1Affine, error) {
+	var commit bls12381.G1Affine
+	commitBytes, err := hex.DecodeString(id)
+	if err != nil {
+		return commit, err
+	}
+	err = commit.Unmarshal(commitBytes)
+
+	return commit, nil
 }

@@ -14,27 +14,27 @@ import (
 var GlobalDataBase *gorm.DB
 var logger = logs.Logger("database")
 
-func init() {
-	dir, err := homedir.Expand("~/.meeda-store")
+func InitDatabase(path string) error {
+	dir, err := homedir.Expand(path)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		err := os.MkdirAll(dir, 0666)
 		if err != nil {
-			panic(err)
+			return err
 		}
 	}
 
 	db, err := gorm.Open(sqlite.Open(filepath.Join(dir, "meeda.db")), &gorm.Config{})
 	if err != nil {
-		logger.Panicf("Failed to connect to database: %s", err.Error())
+		return err
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
-		logger.Panicf("Failed to get sql database: %s", err.Error())
+		return err
 	}
 
 	// 设置连接池中空闲连接的最大数量。
@@ -46,8 +46,9 @@ func init() {
 
 	err = sqlDB.Ping()
 	if err != nil {
-		logger.Panicf("Failed to ping database: %s", err.Error())
+		return err
 	}
 	db.AutoMigrate(&DAFileInfoStore{}, &DAFileIDInfoStore{}, &DAProofInfoStore{})
 	GlobalDataBase = db
+	return nil
 }
