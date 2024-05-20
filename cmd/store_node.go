@@ -131,7 +131,7 @@ func NewStoreServer(endpoint string) (*http.Server, error) {
 
 	router.MaxMultipartMemory = 8 << 20 // 8 MiB
 	router.GET("/", func(c *gin.Context) {
-		c.String(http.StatusOK, "Welcome Server")
+		c.String(http.StatusOK, "Welcome Meeda Store Node")
 	})
 	store.LoadStoreModule(router.Group("/"))
 

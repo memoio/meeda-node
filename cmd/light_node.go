@@ -126,7 +126,7 @@ func NewLightServer(endpoint string) (*http.Server, error) {
 
 	router.MaxMultipartMemory = 8 << 20 // 8 MiB
 	router.GET("/", func(c *gin.Context) {
-		c.String(http.StatusOK, "Welcome Server")
+		c.String(http.StatusOK, "Welcome Meeda Light Node")
 	})
 	light.LoadLightModule(router.Group("/"))
 

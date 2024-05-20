@@ -35,11 +35,9 @@ func getObjectHandler(c *gin.Context) {
 		return
 	}
 
-	data, err := getObjectFromStoreNode(baseUrl, id)
+	data, status, err := getObjectFromStoreNode(baseUrl, id)
 	if err != nil {
-		lerr := logs.ServerError{Message: "get object from store node failed"}
-		errRes := logs.ToAPIErrorCode(lerr)
-		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
+		c.AbortWithError(status, err)
 		return
 	}
 
@@ -65,11 +63,9 @@ func putObjectHandler(c *gin.Context) {
 		return
 	}
 
-	result, err := putObjectIntoStoreNode(baseUrl, databyte, userAddr.String())
+	result, status, err := putObjectIntoStoreNode(baseUrl, databyte, userAddr.String())
 	if err != nil {
-		lerr := logs.ServerError{Message: "Error when calling store node api"}
-		errRes := logs.ToAPIErrorCode(lerr)
-		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
+		c.AbortWithStatusJSON(status, err.Error())
 		return
 	}
 
@@ -159,13 +155,13 @@ func getProofInfoHandler(c *gin.Context) {
 	})
 }
 
-func getObjectFromStoreNode(url string, id string) ([]byte, error) {
+func getObjectFromStoreNode(url string, id string) ([]byte, int, error) {
 	client := &http.Client{Timeout: time.Minute}
 	url = url + "/getObject"
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, err
+		return nil, 500, err
 	}
 
 	params := req.URL.Query()
@@ -174,20 +170,20 @@ func getObjectFromStoreNode(url string, id string) ([]byte, error) {
 
 	res, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 500, err
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode != http.StatusOK {
-		return nil, xerrors.Errorf("Respond code[%d]", res.StatusCode)
-	}
-
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
+		return nil, 500, err
 	}
 
-	return data, nil
+	if res.StatusCode != http.StatusOK {
+		return nil, res.StatusCode, xerrors.Errorf(string(data))
+	}
+
+	return data, 200, nil
 }
 
 type PutObjectResult struct {
@@ -198,7 +194,7 @@ type PutObjectResult struct {
 	Signature string
 }
 
-func putObjectIntoStoreNode(url string, data []byte, from string) (PutObjectResult, error) {
+func putObjectIntoStoreNode(url string, data []byte, from string) (PutObjectResult, int, error) {
 	client := &http.Client{Timeout: time.Minute}
 	url = url + "/putObject"
 
@@ -208,39 +204,37 @@ func putObjectIntoStoreNode(url string, data []byte, from string) (PutObjectResu
 
 	b, err := json.Marshal(payload)
 	if err != nil {
-		return PutObjectResult{}, err
+		return PutObjectResult{}, 500, err
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewReader(b))
 	if err != nil {
-		return PutObjectResult{}, err
+		return PutObjectResult{}, 500, err
 	}
 
 	req.Header.Add("Content-Type", "application/json")
 	res, err := client.Do(req)
 	if err != nil {
-		return PutObjectResult{}, err
+		return PutObjectResult{}, 500, err
 	}
 	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return PutObjectResult{}, err
+		return PutObjectResult{}, 500, err
 	}
 
 	if res.StatusCode != http.StatusOK {
-		return PutObjectResult{}, xerrors.Errorf("Respond code[%d]: %s", res.StatusCode, string(body))
+		return PutObjectResult{}, res.StatusCode, xerrors.Errorf(string(body))
 	}
-
-	logger.Info(string(body))
 
 	var result PutObjectResult
 	err = json.Unmarshal(body, &result)
 	if err != nil {
-		return PutObjectResult{}, err
+		return PutObjectResult{}, 500, err
 	}
 
-	return result, nil
+	return result, 200, nil
 }
 
 func decodeCommit(id string) (bls12381.G1Affine, error) {
@@ -251,5 +245,5 @@ func decodeCommit(id string) (bls12381.G1Affine, error) {
 	}
 	err = commit.Unmarshal(commitBytes)
 
-	return commit, nil
+	return commit, err
 }
