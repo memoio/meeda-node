@@ -48,7 +48,7 @@ var lightNodeRunCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "ip",
 			Usage: "input meeda store node's ip address",
-			Value: "http://localhost:8081",
+			Value: "http://183.240.197.189:38082",
 		},
 	},
 	Action: func(ctx *cli.Context) error {
