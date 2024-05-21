@@ -18,7 +18,7 @@ type DAFileInfo struct {
 
 type DAFileInfoStore struct {
 	gorm.Model
-	Commit              string `gorm:"index;column:commit"`
+	Commit              string `gorm:"uniqueIndex;column:commit"`
 	Size                int64
 	Expiration          int64
 	ChooseNumber        int64

@@ -13,8 +13,8 @@ type DAFileIDInfo struct {
 }
 
 type DAFileIDInfoStore struct {
-	Commit string `gorm:"index;column:commit"`
-	Mid    string `gorm:"index;column:mid"`
+	Commit string `gorm:"uniqueIndex;column:commit"`
+	Mid    string `gorm:"uniqueIndex;column:mid"`
 }
 
 func (f *DAFileIDInfo) CreateDAFileIDInfo() error {

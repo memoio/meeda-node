@@ -22,8 +22,8 @@ import (
 )
 
 var (
-	blockNumber = big.NewInt(0)
-	logger      = logs.Logger("dumper")
+	// blockNumber = big.NewInt(0)
+	logger = logs.Logger("dumper")
 )
 
 type Dumper struct {
@@ -31,6 +31,8 @@ type Dumper struct {
 	contractABI     abi.ABI
 	contractAddress common.Address
 	// store           MapStore
+
+	blockNumber *big.Int
 
 	eventNameMap map[common.Hash]string
 	indexedMap   map[common.Hash]abi.Arguments
@@ -80,6 +82,12 @@ func NewDataAvailabilityDumper(chain string) (dumper *Dumper, err error) {
 		dumper.indexedMap[event.ID] = indexed
 	}
 
+	blockNumber, err := database.GetBlockNumber()
+	if err != nil {
+		blockNumber = 0
+	}
+	dumper.blockNumber = big.NewInt(blockNumber)
+
 	return dumper, nil
 }
 
@@ -107,12 +115,13 @@ func (d *Dumper) DumpFileProof() error {
 	defer client.Close()
 
 	events, err := client.FilterLogs(context.TODO(), ethereum.FilterQuery{
-		FromBlock: blockNumber,
+		FromBlock: d.blockNumber,
 		Addresses: []common.Address{d.contractAddress},
 	})
 	if err != nil {
 		return err
 	}
+	lastBlockNumber := d.blockNumber
 
 	for _, event := range events {
 		eventName, ok1 := d.eventNameMap[event.Topics[0]]
@@ -134,7 +143,10 @@ func (d *Dumper) DumpFileProof() error {
 			break
 		}
 
-		blockNumber = big.NewInt(int64(event.BlockNumber) + 1)
+		d.blockNumber = big.NewInt(int64(event.BlockNumber) + 1)
+	}
+	if d.blockNumber.Cmp(lastBlockNumber) == 1 {
+		database.SetBlockNumber(d.blockNumber.Int64())
 	}
 
 	return nil

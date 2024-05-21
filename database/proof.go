@@ -109,5 +109,24 @@ func proofStoreToProof(proof DAProofInfoStore) (DAProofInfo, error) {
 	}, nil
 }
 
+var blockNumberKey = "block_number_key"
+
 type DABlockNumber struct {
+	BlockNumberKey string `gorm:"primarykey;column:key"`
+	BlockNumber    int64
+}
+
+func SetBlockNumber(blockNumber int64) error {
+	var daBlockNumber = DABlockNumber{
+		BlockNumberKey: blockNumberKey,
+		BlockNumber:    blockNumber,
+	}
+	return GlobalDataBase.Save(&daBlockNumber).Error
+}
+
+func GetBlockNumber() (int64, error) {
+	var blockNumber DABlockNumber
+	err := GlobalDataBase.Model(&DABlockNumber{}).First(&blockNumber).Error
+
+	return blockNumber.BlockNumber, err
 }

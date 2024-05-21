@@ -136,8 +136,9 @@ func putObjectHandler(c *gin.Context) {
 		return
 	}
 
+	commitBytes := commit.Bytes()
 	c.JSON(http.StatusOK, gin.H{
-		"commit":    hex.EncodeToString(commit.Marshal()),
+		"commit":    hex.EncodeToString(commitBytes[:]),
 		"size":      oi.Size,
 		"start":     start.Unix(),
 		"end":       end.Unix(),
@@ -169,7 +170,10 @@ func decodeCommit(id string) (bls12381.G1Affine, error) {
 	if err != nil {
 		return commit, err
 	}
-	err = commit.Unmarshal(commitBytes)
+	_, err = commit.SetBytes(commitBytes)
+	if err != nil {
+		return commit, err
+	}
 
 	return commit, nil
 }

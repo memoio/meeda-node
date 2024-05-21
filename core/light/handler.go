@@ -37,7 +37,7 @@ func getObjectHandler(c *gin.Context) {
 
 	data, status, err := getObjectFromStoreNode(baseUrl, id)
 	if err != nil {
-		c.AbortWithError(status, err)
+		c.AbortWithStatusJSON(status, err.Error())
 		return
 	}
 
@@ -90,8 +90,9 @@ func putObjectHandler(c *gin.Context) {
 		return
 	}
 
+	commitBytes := commit.Bytes()
 	c.JSON(http.StatusOK, gin.H{
-		"id": hex.EncodeToString(commit.Marshal()),
+		"id": hex.EncodeToString(commitBytes[:]),
 	})
 }
 
