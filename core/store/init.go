@@ -2,11 +2,11 @@ package store
 
 import (
 	"crypto/ecdsa"
-	"math/big"
 	"time"
 
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr/kzg"
+	dkzg "github.com/memoio/did-solidity/kzg"
 	proof "github.com/memoio/go-did/file-proof"
 	"github.com/memoio/meeda-node/gateway"
 	"github.com/memoio/meeda-node/logs"
@@ -39,10 +39,14 @@ func InitStoreNode(chain string, sk *ecdsa.PrivateKey, api, token string) error 
 		daStore = store
 	}
 
-	var err error
-	DefaultSRS, err = kzg.NewSRS(4*1024, big.NewInt(985))
+	key, err := dkzg.InitKey()
 	if err != nil {
 		return err
+	}
+
+	DefaultSRS = &kzg.SRS{
+		Pk: key.Pk,
+		Vk: key.Vk,
 	}
 
 	zeroCommit.X.SetZero()
