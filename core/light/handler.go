@@ -8,7 +8,6 @@ import (
 	"io"
 	"math/big"
 	"net/http"
-	"strings"
 	"time"
 
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
@@ -65,7 +64,7 @@ func putObjectHandler(c *gin.Context) {
 	}
 
 	result, status, err := putObjectIntoStoreNode(baseUrl, databyte, userAddr.String())
-	if err != nil && !strings.Contains(err.Error(), "exist") {
+	if err != nil {
 		c.AbortWithStatusJSON(status, err.Error())
 		return
 	}
@@ -80,14 +79,6 @@ func putObjectHandler(c *gin.Context) {
 	signature, err := hex.DecodeString(result.Signature)
 	if err != nil {
 		errRes := logs.ToAPIErrorCode(err)
-		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
-		return
-	}
-
-	// check data is uploaded to contract
-	_, err = database.GetFileInfoByCommit(commit)
-	if err == nil {
-		errRes := logs.ToAPIErrorCode(logs.ErrAlreadyExist)
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}

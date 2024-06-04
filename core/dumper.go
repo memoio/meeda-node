@@ -94,10 +94,7 @@ func NewDataAvailabilityDumper(chain string) (dumper *Dumper, err error) {
 func (d *Dumper) SubscribeFileProof(ctx context.Context) error {
 	// var last *big.Int
 	for {
-		err := d.DumpFileProof()
-		if err != nil {
-			return err
-		}
+		d.DumpFileProof()
 
 		select {
 		case <-ctx.Done():
@@ -110,6 +107,7 @@ func (d *Dumper) SubscribeFileProof(ctx context.Context) error {
 func (d *Dumper) DumpFileProof() error {
 	client, err := ethclient.DialContext(context.TODO(), d.endpoint)
 	if err != nil {
+		logger.Error(err.Error())
 		return err
 	}
 	defer client.Close()
@@ -119,6 +117,7 @@ func (d *Dumper) DumpFileProof() error {
 		Addresses: []common.Address{d.contractAddress},
 	})
 	if err != nil {
+		logger.Error(err.Error())
 		return err
 	}
 	lastBlockNumber := d.blockNumber

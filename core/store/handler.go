@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
+	"github.com/memoio/go-mefs-v2/lib/etag"
 	"github.com/memoio/meeda-node/database"
 	"github.com/memoio/meeda-node/gateway"
 	"github.com/memoio/meeda-node/logs"
@@ -96,16 +97,6 @@ func putObjectHandler(c *gin.Context) {
 		return
 	}
 
-	object := defaultDAObject + hex.EncodeToString(crypto.Keccak256(databyte))
-
-	var buf *bytes.Buffer = bytes.NewBuffer(databyte)
-	oi, err := daStore.PutObject(c.Request.Context(), defaultDABucket, object, buf, gateway.ObjectOptions{})
-	if err != nil {
-		errRes := logs.ToAPIErrorCode(err)
-		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
-		return
-	}
-
 	elements := split(databyte)
 	commit, err := kzg.Commit(elements, DefaultSRS.Pk)
 	if err != nil {
@@ -114,9 +105,27 @@ func putObjectHandler(c *gin.Context) {
 		return
 	}
 
+	// check data is uploaded to contract
+	_, err = database.GetFileInfoByCommit(commit)
+	if err == nil {
+		errRes := logs.ToAPIErrorCode(logs.ErrAlreadyExist)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
+		return
+	}
+
+	object := defaultDAObject + hex.EncodeToString(crypto.Keccak256(databyte))
+
+	var buf *bytes.Buffer = bytes.NewBuffer(databyte)
+	_, err = daStore.PutObject(c.Request.Context(), defaultDABucket, object, buf, gateway.ObjectOptions{})
+	if err != nil && !strings.Contains(err.Error(), "exist") {
+		errRes := logs.ToAPIErrorCode(err)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
+		return
+	}
+
 	start := time.Now()
 	end := start.Add(defaultExpiration)
-	hash := defaultProofInstance.GetCredentialHash(common.HexToAddress(from), commit, uint64(oi.Size), big.NewInt(start.Unix()), big.NewInt(end.Unix()))
+	hash := defaultProofInstance.GetCredentialHash(common.HexToAddress(from), commit, uint64(len(databyte)), big.NewInt(start.Unix()), big.NewInt(end.Unix()))
 	signature, err := crypto.Sign(hash, submitterSk)
 	if err != nil {
 		errRes := logs.ToAPIErrorCode(err)
@@ -127,7 +136,7 @@ func putObjectHandler(c *gin.Context) {
 	// 记录commit => mid的映射
 	var fileInfo = database.DAFileIDInfo{
 		Commit: commit,
-		Mid:    oi.Cid,
+		Mid:    genCid(databyte),
 	}
 	err = fileInfo.CreateDAFileIDInfo()
 	if err != nil {
@@ -139,7 +148,7 @@ func putObjectHandler(c *gin.Context) {
 	commitBytes := commit.Bytes()
 	c.JSON(http.StatusOK, gin.H{
 		"commit":    hex.EncodeToString(commitBytes[:]),
-		"size":      oi.Size,
+		"size":      int64(len(databyte)),
 		"start":     start.Unix(),
 		"end":       end.Unix(),
 		"signature": hex.EncodeToString(signature),
@@ -176,4 +185,16 @@ func decodeCommit(id string) (bls12381.G1Affine, error) {
 	}
 
 	return commit, nil
+}
+
+func genCid(data []byte) string {
+	h := etag.NewTree()
+	_, err := h.Write(data)
+	if err != nil {
+		panic(err)
+	}
+	etag2 := h.Sum(nil)
+
+	etagString2, _ := etag.ToString(etag2)
+	return etagString2
 }

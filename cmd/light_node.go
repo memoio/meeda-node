@@ -129,6 +129,8 @@ func NewLightServer(endpoint string) (*http.Server, error) {
 		c.String(http.StatusOK, "Welcome Meeda Light Node")
 	})
 	light.LoadLightModule(router.Group("/"))
+	// Compatible with previous RPCs
+	light.LoadLightModule(router.Group("/da"))
 
 	return &http.Server{
 		Addr:    endpoint,
