@@ -41,6 +41,7 @@ func getObjectHandler(c *gin.Context) {
 		commit, err := decodeCommit(id)
 		if err != nil {
 			errRes := logs.ToAPIErrorCode(err)
+			logger.Error(err)
 			c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 			return
 		}
@@ -49,6 +50,7 @@ func getObjectHandler(c *gin.Context) {
 		file, err := database.GetFileInfoByCommit(commit)
 		if err != nil {
 			errRes := logs.ToAPIErrorCode(err)
+			logger.Error(err)
 			c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 			return
 		}
@@ -56,6 +58,7 @@ func getObjectHandler(c *gin.Context) {
 		fileID, err := database.GetFileIDInfoByCommit(file.Commit)
 		if err != nil {
 			errRes := logs.ToAPIErrorCode(err)
+			logger.Error(err)
 			c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 			return
 		}
@@ -67,6 +70,7 @@ func getObjectHandler(c *gin.Context) {
 	err := daStore.GetObject(c.Request.Context(), id, &w, gateway.ObjectOptions{})
 	if err != nil {
 		errRes := logs.ToAPIErrorCode(err)
+		logger.Error(err)
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
@@ -80,12 +84,14 @@ func putObjectHandler(c *gin.Context) {
 	data, ok := body["data"].(string)
 	if !ok {
 		errRes := logs.ToAPIErrorCode(logs.ServerError{Message: "field 'data' is not set"})
+		logger.Error("field 'data' is not set")
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 	from, ok := body["from"].(string)
 	if !ok {
 		errRes := logs.ToAPIErrorCode(logs.ServerError{Message: "field 'from' is not set"})
+		logger.Error("field 'from' is not set")
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
@@ -93,6 +99,7 @@ func putObjectHandler(c *gin.Context) {
 	databyte, err := hex.DecodeString(data)
 	if err != nil {
 		errRes := logs.ToAPIErrorCode(logs.ServerError{Message: "field 'data' is not legally hexadecimal presented"})
+		logger.Error(err)
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
@@ -101,6 +108,7 @@ func putObjectHandler(c *gin.Context) {
 	commit, err := kzg.Commit(elements, DefaultSRS.Pk)
 	if err != nil {
 		errRes := logs.ToAPIErrorCode(err)
+		logger.Error(err)
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
@@ -109,6 +117,7 @@ func putObjectHandler(c *gin.Context) {
 	_, err = database.GetFileInfoByCommit(commit)
 	if err == nil {
 		errRes := logs.ToAPIErrorCode(logs.ErrAlreadyExist)
+		logger.Error(err)
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
@@ -119,6 +128,7 @@ func putObjectHandler(c *gin.Context) {
 	_, err = daStore.PutObject(c.Request.Context(), defaultDABucket, object, buf, gateway.ObjectOptions{})
 	if err != nil && !strings.Contains(err.Error(), "exist") {
 		errRes := logs.ToAPIErrorCode(err)
+		logger.Error(err)
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
@@ -129,6 +139,7 @@ func putObjectHandler(c *gin.Context) {
 	signature, err := crypto.Sign(hash, submitterSk)
 	if err != nil {
 		errRes := logs.ToAPIErrorCode(err)
+		logger.Error(err)
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
@@ -141,6 +152,7 @@ func putObjectHandler(c *gin.Context) {
 	err = fileInfo.CreateDAFileIDInfo()
 	if err != nil {
 		errRes := logs.ToAPIErrorCode(err)
+		logger.Error(err)
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}

@@ -31,12 +31,14 @@ func getObjectHandler(c *gin.Context) {
 	if len(id) == 0 {
 		lerr := logs.ServerError{Message: "object's id is not set"}
 		errRes := logs.ToAPIErrorCode(lerr)
+		logger.Error(lerr)
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
 	data, status, err := getObjectFromStoreNode(baseUrl, id)
 	if err != nil {
+		logger.Error(err)
 		c.AbortWithStatusJSON(status, err.Error())
 		return
 	}
@@ -51,6 +53,7 @@ func putObjectHandler(c *gin.Context) {
 	if !ok {
 		lerr := logs.ServerError{Message: "field 'data' is not set"}
 		errRes := logs.ToAPIErrorCode(lerr)
+		logger.Error(lerr)
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
@@ -59,12 +62,14 @@ func putObjectHandler(c *gin.Context) {
 	if err != nil {
 		lerr := logs.ServerError{Message: "field 'data' is not legally hexadecimal presented"}
 		errRes := logs.ToAPIErrorCode(lerr)
+		logger.Error(err)
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
 
 	result, status, err := putObjectIntoStoreNode(baseUrl, databyte, userAddr.String())
 	if err != nil {
+		logger.Error(err)
 		c.AbortWithStatusJSON(status, err.Error())
 		return
 	}
@@ -72,6 +77,7 @@ func putObjectHandler(c *gin.Context) {
 	commit, err := decodeCommit(result.Commit)
 	if err != nil {
 		errRes := logs.ToAPIErrorCode(err)
+		logger.Error(err)
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
@@ -79,6 +85,7 @@ func putObjectHandler(c *gin.Context) {
 	signature, err := hex.DecodeString(result.Signature)
 	if err != nil {
 		errRes := logs.ToAPIErrorCode(err)
+		logger.Error(err)
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
@@ -86,6 +93,7 @@ func putObjectHandler(c *gin.Context) {
 	err = proofInstance.AddFile(commit, uint64(result.Size), big.NewInt(result.Start), big.NewInt(result.End), signature)
 	if err != nil {
 		errRes := logs.ToAPIErrorCode(err)
+		logger.Error(err)
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
