@@ -81,9 +81,11 @@ func putObjectHandler(c *gin.Context) {
 	_, err = database.GetFileInfoByCommit(commit)
 	if err == nil {
 		commitBytes := commit.Bytes()
+		logger.Infof("%s is already exist, so we returned", hex.EncodeToString(commitBytes[:]))
 		c.JSON(http.StatusOK, gin.H{
 			"id": hex.EncodeToString(commitBytes[:]),
 		})
+		return
 	}
 
 	result, status, err := putObjectIntoStoreNode(baseUrl, databyte, userAddr.String())
