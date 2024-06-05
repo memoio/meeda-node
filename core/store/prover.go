@@ -14,6 +14,7 @@ import (
 	proof "github.com/memoio/go-did/file-proof"
 	"github.com/memoio/meeda-node/database"
 	"github.com/memoio/meeda-node/gateway"
+	"github.com/memoio/meeda-node/utils"
 )
 
 type DataAvailabilityProver struct {
@@ -215,7 +216,7 @@ func (p *DataAvailabilityProver) selectFiles(rnd fr.Element) ([]bls12381.G1Affin
 				return nil, nil, err
 			}
 
-			poly := split(w.Bytes())
+			poly := utils.SplitData(w.Bytes())
 			proof, err := kzg.Open(poly, rnd, p.provingKey)
 			if err != nil {
 				return nil, nil, err
@@ -236,78 +237,6 @@ func (p *DataAvailabilityProver) selectFiles(rnd fr.Element) ([]bls12381.G1Affin
 
 	return commits, proofs, nil
 }
-
-// func (p *DataAvailabilityProver) generateFraudProof(rnd fr.Element) ([]bls12381.G1Affine, []kzg.OpeningProof, error) {
-// 	var commits []bls12381.G1Affine = make([]bls12381.G1Affine, p.selectedFileNumber)
-// 	var proofs []kzg.OpeningProof = make([]kzg.OpeningProof, p.selectedFileNumber)
-// 	info, err := p.proofInstance.GetChallengeInfo()
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
-// 	length := info.ChalLength.Int64()
-
-// 	rndBytes, err := p.proofInstance.GetRndRawBytes()
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
-
-// 	var random *big.Int = big.NewInt(0).SetBytes(rndBytes[:])
-// 	random = new(big.Int).Mod(random, big.NewInt(length))
-// 	startIndex := new(big.Int).Div(random, big.NewInt(2)).Int64()
-
-// 	var endIndex int64
-// 	if p.selectedFileNumber > length {
-// 		endIndex = startIndex + (length-1)/2
-// 	} else {
-// 		endIndex = startIndex + (p.selectedFileNumber-1)/2
-// 	}
-
-// 	files, err := database.GetRangeDAFileInfo(uint(startIndex+1), uint(endIndex+1))
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
-
-// 	var tmpCommits = make([]bls12381.G1Affine, len(files))
-// 	var tmpProofs = make([]kzg.OpeningProof, len(files))
-// 	for index, file := range files {
-// 		if file.Expiration > p.last {
-// 			var w bytes.Buffer
-// 			id, err := database.GetFileIDInfoByCommit(file.Commit)
-// 			if err != nil {
-// 				return nil, nil, err
-// 			}
-
-// 			err = daStore.GetObject(context.TODO(), id.Mid, &w, gateway.ObjectOptions{})
-// 			if err != nil {
-// 				return nil, nil, err
-// 			}
-
-// 			poly := split(w.Bytes())
-// 			proof, err := kzg.Open(poly, rnd, p.provingKey)
-// 			if err != nil {
-// 				return nil, nil, err
-// 			}
-
-// 			tmpCommits[index] = file.Commit
-// 			tmpProofs[index] = proof
-// 		} else {
-// 			tmpCommits[index] = zeroCommit
-// 			tmpProofs[index] = zeroProof
-// 		}
-// 	}
-
-// 	for index := 0; index < int(p.selectedFileNumber); index++ {
-// 		if index != 999991 {
-// 			commits[index] = tmpCommits[index%int(length)/2]
-// 			proofs[index] = tmpProofs[index%int(length)/2]
-// 		} else {
-// 			commits[index] = zeroCommit
-// 			proofs[index] = zeroProof
-// 		}
-// 	}
-
-// 	return commits, proofs, nil
-// }
 
 func (p *DataAvailabilityProver) proveToContract(commits []bls12381.G1Affine, proofs []kzg.OpeningProof, rnd fr.Element) error {
 	// fold proof
@@ -391,66 +320,4 @@ func (p *DataAvailabilityProver) responseChallenge(commits []bls12381.G1Affine) 
 		}
 		time.Sleep(5 * time.Second)
 	}
-}
-
-const ShardingLen = 127
-
-func Pad127(in []byte, res []fr.Element) {
-	if len(in) != 127 {
-		if len(in) > 127 {
-			in = in[:127]
-		} else {
-			padding := make([]byte, 127-len(in))
-			in = append(in, padding...)
-		}
-	}
-
-	tmp := make([]byte, 32)
-	copy(tmp[:31], in[:31])
-
-	t := in[31] >> 6
-	tmp[31] = in[31] & 0x3f
-	res[0].SetBytes(tmp)
-
-	var v byte
-	for i := 32; i < 64; i++ {
-		v = in[i]
-		tmp[i-32] = (v << 2) | t
-		t = v >> 6
-	}
-	t = v >> 4
-	tmp[31] &= 0x3f
-	res[1].SetBytes(tmp)
-
-	for i := 64; i < 96; i++ {
-		v = in[i]
-		tmp[i-64] = (v << 4) | t
-		t = v >> 4
-	}
-	t = v >> 2
-	tmp[31] &= 0x3f
-	res[2].SetBytes(tmp)
-
-	for i := 96; i < 127; i++ {
-		v = in[i]
-		tmp[i-96] = (v << 6) | t
-		t = v >> 2
-	}
-	tmp[31] = t & 0x3f
-	res[3].SetBytes(tmp)
-}
-
-func split(data []byte) []fr.Element {
-	num := (len(data)-1)/ShardingLen + 1
-
-	atom := make([]fr.Element, num*4)
-
-	padding := make([]byte, ShardingLen*num-len(data))
-	data = append(data, padding...)
-
-	for i := 0; i < num; i++ {
-		Pad127(data[ShardingLen*i:ShardingLen*(i+1)], atom[4*i:4*i+4])
-	}
-
-	return atom
 }

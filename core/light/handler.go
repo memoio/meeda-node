@@ -11,6 +11,7 @@ import (
 	"time"
 
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
+	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr/kzg"
 	"github.com/gin-gonic/gin"
 	"github.com/memoio/meeda-node/database"
 	"github.com/memoio/meeda-node/logs"
@@ -67,6 +68,24 @@ func putObjectHandler(c *gin.Context) {
 		return
 	}
 
+	elements := utils.SplitData(databyte)
+	commit, err := kzg.Commit(elements, DefaultSRS.Pk)
+	if err != nil {
+		errRes := logs.ToAPIErrorCode(err)
+		logger.Error(err)
+		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
+		return
+	}
+
+	// check data is uploaded to meeda
+	_, err = database.GetFileInfoByCommit(commit)
+	if err == nil {
+		commitBytes := commit.Bytes()
+		c.JSON(http.StatusOK, gin.H{
+			"id": hex.EncodeToString(commitBytes[:]),
+		})
+	}
+
 	result, status, err := putObjectIntoStoreNode(baseUrl, databyte, userAddr.String())
 	if err != nil {
 		logger.Error(err)
@@ -74,13 +93,13 @@ func putObjectHandler(c *gin.Context) {
 		return
 	}
 
-	commit, err := decodeCommit(result.Commit)
-	if err != nil {
-		errRes := logs.ToAPIErrorCode(err)
-		logger.Error(err)
-		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
-		return
-	}
+	// decodeCommit, err := decodeCommit(result.Commit)
+	// if err != nil {
+	// 	errRes := logs.ToAPIErrorCode(err)
+	// 	logger.Error(err)
+	// 	c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
+	// 	return
+	// }
 
 	signature, err := hex.DecodeString(result.Signature)
 	if err != nil {

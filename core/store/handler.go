@@ -104,7 +104,7 @@ func putObjectHandler(c *gin.Context) {
 		return
 	}
 
-	elements := split(databyte)
+	elements := utils.SplitData(databyte)
 	commit, err := kzg.Commit(elements, DefaultSRS.Pk)
 	if err != nil {
 		errRes := logs.ToAPIErrorCode(err)
@@ -113,11 +113,11 @@ func putObjectHandler(c *gin.Context) {
 		return
 	}
 
-	// check data is uploaded to contract
+	// check data is uploaded to meeda
 	_, err = database.GetFileInfoByCommit(commit)
 	if err == nil {
 		errRes := logs.ToAPIErrorCode(logs.ErrAlreadyExist)
-		logger.Error(err)
+		logger.Error(logs.ErrAlreadyExist)
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
 		return
 	}
@@ -126,6 +126,7 @@ func putObjectHandler(c *gin.Context) {
 
 	var buf *bytes.Buffer = bytes.NewBuffer(databyte)
 	_, err = daStore.PutObject(c.Request.Context(), defaultDABucket, object, buf, gateway.ObjectOptions{})
+	// check data is uploaded to mefs
 	if err != nil && !strings.Contains(err.Error(), "exist") {
 		errRes := logs.ToAPIErrorCode(err)
 		logger.Error(err)
