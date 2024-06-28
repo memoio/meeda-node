@@ -2,12 +2,15 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
 	"github.com/memoio/meeda-node/core"
@@ -22,6 +25,7 @@ var LightNodeCmd = &cli.Command{
 	Subcommands: []*cli.Command{
 		lightNodeRunCmd,
 		// challengerNodeStopCmd,
+		queryProfitsCmd,
 	},
 }
 
@@ -88,6 +92,12 @@ var lightNodeRunCmd = &cli.Command{
 		}
 		go dumper.SubscribeFileProof(cctx)
 
+		prover, err := light.NewDataAvailabilityProver(chain, privateKey)
+		if err != nil {
+			log.Fatalf("new light node prover: %s\n", err)
+		}
+		go prover.ProveDataAccess(cctx)
+
 		challenger, err := light.NewDataAvailabilityChallenger(chain, privateKey)
 		if err != nil {
 			return err
@@ -116,6 +126,51 @@ var lightNodeRunCmd = &cli.Command{
 
 		log.Println("Server exiting")
 
+		return nil
+	},
+}
+
+var queryProfitsCmd = &cli.Command{
+	Name:  "profit",
+	Usage: "query this node's profit of submitProof and challenge",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "address",
+			Usage: "input this meeda light node's account address",
+		},
+	},
+	Action: func(ctx *cli.Context) error {
+		address := common.HexToAddress(ctx.String("address"))
+		submitProfit := big.NewInt(0)
+		challengeProfit := big.NewInt(0)
+		submitPenalty := big.NewInt(0)
+
+		proofs, err := database.GetDAProofsBySubmitter(address)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, proof := range proofs {
+			submitProfit.Add(submitProfit, proof.Profit)
+		}
+
+		penalties, err := database.GetPenaltyByAccount(address, 0)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, penalty := range penalties {
+			amount := new(big.Int).Add(penalty.RewardAmount, penalty.ToFoundationAmount)
+			submitPenalty.Add(submitPenalty, amount)
+		}
+
+		rewards, err := database.GetPenaltyByAccount(address, 1)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, reward := range rewards {
+			challengeProfit.Add(challengeProfit, reward.RewardAmount)
+		}
+
+		fmt.Println("submitProfit:", submitProfit, "\nsubmitPenalty:", submitPenalty, "\nchallengeProfit:", challengeProfit)
 		return nil
 	},
 }

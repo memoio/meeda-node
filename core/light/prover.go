@@ -1,9 +1,9 @@
-package store
+package light
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	proof "github.com/memoio/go-did/file-proof"
 	"github.com/memoio/meeda-node/database"
-	"github.com/memoio/meeda-node/gateway"
 	"github.com/memoio/meeda-node/utils"
 )
 
@@ -224,17 +223,16 @@ func (p *DataAvailabilityProver) selectFiles(rnd fr.Element) ([]bls12381.G1Affin
 		}
 
 		if file.Expiration > p.last {
-			var w bytes.Buffer
 			id, err := database.GetFileIDInfoByCommit(file.Commit)
 			if err != nil {
 				return nil, nil, err
 			}
-			err = daStore.GetObject(context.TODO(), id.Mid, &w, gateway.ObjectOptions{})
+			data, _, err := getObjectFromStoreNode(baseUrl, id.Mid)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, errors.New(err.Error())
 			}
 
-			poly := utils.SplitData(w.Bytes())
+			poly := utils.SplitData(data)
 			proof, err := kzg.Open(poly, rnd, p.provingKey)
 			if err != nil {
 				return nil, nil, err
@@ -269,18 +267,6 @@ func (p *DataAvailabilityProver) proveToContract(commits []bls12381.G1Affine, pr
 		// compute
 		foldedValue.Add(&foldedValue, &proofs[index].ClaimedValue)
 	}
-
-	// var tmpCommit []bls12381.G1Affine
-	// var aggregatedCommits [10]bls12381.G1Affine
-	// var splitLength = len(commits) / 10
-	// for i := 0; i < 10; i++ {
-	// 	tmpCommit = commits[i*splitLength : (i+1)*splitLength]
-	// 	var aggregatedCommit bls12381.G1Affine = tmpCommit[0]
-	// 	for _, commit := range tmpCommit[1:] {
-	// 		aggregatedCommit.Add(&aggregatedCommit, &commit)
-	// 	}
-	// 	aggregatedCommits[i] = aggregatedCommit
-	// }
 
 	foldedProof.H = foldedPi
 	foldedProof.ClaimedValue = foldedValue

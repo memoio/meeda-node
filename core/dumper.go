@@ -28,8 +28,8 @@ var (
 
 type Dumper struct {
 	endpoint        string
-	contractABI     abi.ABI
-	contractAddress common.Address
+	contractABI     []abi.ABI
+	contractAddress []common.Address
 	// store           MapStore
 
 	blockNumber *big.Int
@@ -60,21 +60,47 @@ func NewDataAvailabilityDumper(chain string) (dumper *Dumper, err error) {
 		return dumper, err
 	}
 
-	dumper.contractAddress, err = instanceIns.Instances(&bind.CallOpts{}, com.TypeFileProof)
+	fileProofAddr, err := instanceIns.Instances(&bind.CallOpts{}, com.TypeFileProof)
 	if err != nil {
 		return dumper, err
 	}
 
-	dumper.contractABI, err = abi.JSON(strings.NewReader(proxyfileproof.IFileProofABI))
+	fileProofPledgeAddr, err := instanceIns.Instances(&bind.CallOpts{}, com.TypeFileProofPledge)
 	if err != nil {
 		return dumper, err
 	}
 
-	for name, event := range dumper.contractABI.Events {
+	dumper.contractAddress = []common.Address{fileProofAddr, fileProofPledgeAddr}
+
+	fpContractABI, err := abi.JSON(strings.NewReader(proxyfileproof.IFileProofABI))
+	if err != nil {
+		return dumper, err
+	}
+
+	fpPledgeContractABI, err := abi.JSON(strings.NewReader(proxyfileproof.IPledgeABI))
+	if err != nil {
+		return dumper, err
+	}
+
+	dumper.contractABI = []abi.ABI{fpContractABI, fpPledgeContractABI}
+
+	for name, event := range dumper.contractABI[0].Events {
 		dumper.eventNameMap[event.ID] = name
 
 		var indexed abi.Arguments
-		for _, arg := range dumper.contractABI.Events[name].Inputs {
+		for _, arg := range dumper.contractABI[0].Events[name].Inputs {
+			if arg.Indexed {
+				indexed = append(indexed, arg)
+			}
+		}
+		dumper.indexedMap[event.ID] = indexed
+	}
+
+	for name, event := range dumper.contractABI[1].Events {
+		dumper.eventNameMap[event.ID] = name
+
+		var indexed abi.Arguments
+		for _, arg := range dumper.contractABI[1].Events[name].Inputs {
 			if arg.Indexed {
 				indexed = append(indexed, arg)
 			}
@@ -112,9 +138,17 @@ func (d *Dumper) DumpFileProof() error {
 	}
 	defer client.Close()
 
-	events, err := client.FilterLogs(context.TODO(), ethereum.FilterQuery{
+	eventsFileProof, err := client.FilterLogs(context.TODO(), ethereum.FilterQuery{
 		FromBlock: d.blockNumber,
-		Addresses: []common.Address{d.contractAddress},
+		Addresses: []common.Address{d.contractAddress[0]},
+	})
+	if err != nil {
+		logger.Error(err.Error())
+		return err
+	}
+	eventsFileProofPledge, err := client.FilterLogs(context.TODO(), ethereum.FilterQuery{
+		FromBlock: d.blockNumber,
+		Addresses: []common.Address{d.contractAddress[1]},
 	})
 	if err != nil {
 		logger.Error(err.Error())
@@ -122,18 +156,21 @@ func (d *Dumper) DumpFileProof() error {
 	}
 	lastBlockNumber := d.blockNumber
 
-	for _, event := range events {
+	for _, event := range eventsFileProof {
 		eventName, ok1 := d.eventNameMap[event.Topics[0]]
 		if !ok1 {
 			continue
 		}
 		switch eventName {
 		case "AddFile":
-			logger.Info("Handle Add File Evnent")
+			logger.Info("Handle Add File Event")
 			err = d.HandleAddFile(event)
 		case "SubmitProof":
-			logger.Info("Handle Submit Proof Evnent")
+			logger.Info("Handle Submit Proof Event")
 			err = d.HandleSubmitProof(event)
+		case "ChallengeRes":
+			logger.Info("Handle Challenge Res Event")
+			err = d.HandleChallengeRes(event)
 		default:
 			continue
 		}
@@ -144,6 +181,25 @@ func (d *Dumper) DumpFileProof() error {
 
 		d.blockNumber = big.NewInt(int64(event.BlockNumber) + 1)
 	}
+
+	for _, event := range eventsFileProofPledge {
+		eventName, ok1 := d.eventNameMap[event.Topics[0]]
+		if !ok1 {
+			continue
+		}
+		switch eventName {
+		case "Penalize":
+			logger.Info("Handle Penalize Event")
+			err = d.HandlePenalize(event)
+		default:
+			continue
+		}
+		if err != nil {
+			logger.Error(err.Error())
+			break
+		}
+	}
+
 	if d.blockNumber.Cmp(lastBlockNumber) == 1 {
 		database.SetBlockNumber(d.blockNumber.Int64())
 	}
@@ -151,12 +207,20 @@ func (d *Dumper) DumpFileProof() error {
 	return nil
 }
 
-func (d *Dumper) unpack(log types.Log, out interface{}) error {
+func (d *Dumper) unpack(log types.Log, contractType uint8, out interface{}) error {
 	eventName := d.eventNameMap[log.Topics[0]]
 	indexed := d.indexedMap[log.Topics[0]]
-	err := d.contractABI.UnpackIntoInterface(out, eventName, log.Data)
-	if err != nil {
-		return err
+	switch contractType {
+	case 0:
+		err := d.contractABI[0].UnpackIntoInterface(out, eventName, log.Data)
+		if err != nil {
+			return err
+		}
+	default:
+		err := d.contractABI[1].UnpackIntoInterface(out, eventName, log.Data)
+		if err != nil {
+			return err
+		}
 	}
 
 	return abi.ParseTopics(out, indexed, log.Topics[1:])
@@ -173,7 +237,7 @@ type AddFile struct {
 
 func (d *Dumper) HandleAddFile(log types.Log) error {
 	var out AddFile
-	err := d.unpack(log, &out)
+	err := d.unpack(log, 0, &out)
 	if err != nil {
 		return err
 	}
@@ -189,15 +253,17 @@ func (d *Dumper) HandleAddFile(log types.Log) error {
 }
 
 type SubmitProof struct {
-	Rnd [32]byte
-	Cn  [4][32]byte
-	Pn  proxyfileproof.IFileProofProofInfo
-	Res bool
+	Submitter common.Address
+	Rnd       [32]byte
+	Cn        [4][32]byte
+	Pn        proxyfileproof.IFileProofProofInfo
+	Last      *big.Int
+	Profit    *big.Int
 }
 
 func (d *Dumper) HandleSubmitProof(log types.Log) error {
 	var out SubmitProof
-	err := d.unpack(log, &out)
+	err := d.unpack(log, 0, &out)
 	if err != nil {
 		return err
 	}
@@ -206,12 +272,35 @@ func (d *Dumper) HandleSubmitProof(log types.Log) error {
 	var rnd fr.Element
 	rnd.SetBytes(out.Rnd[:])
 	var proof = database.DAProofInfo{
-		Rnd:     rnd,
-		Commits: proof.FromSolidityG1(out.Cn),
-		Proof:   proof.FromSolidityProof(out.Pn),
-		Result:  out.Res,
+		Submitter: out.Submitter,
+		Rnd:       rnd,
+		Commits:   proof.FromSolidityG1(out.Cn),
+		Proof:     proof.FromSolidityProof(out.Pn),
+		Last:      out.Last,
+		Profit:    out.Profit,
 	}
 
 	return proof.CreateDAProofInfo()
+}
 
+func (d *Dumper) HandleChallengeRes(log types.Log) error {
+	var out database.DAChallengeResInfo
+	err := d.unpack(log, 0, &out)
+	if err != nil {
+		return err
+	}
+
+	// store penalty
+	return out.CreateDAChallengeResInfo()
+}
+
+func (d *Dumper) HandlePenalize(log types.Log) error {
+	var out database.DAPenaltyInfo
+	err := d.unpack(log, 1, &out)
+	if err != nil {
+		return err
+	}
+
+	// store penalty
+	return out.CreateDAPenaltyInfo()
 }

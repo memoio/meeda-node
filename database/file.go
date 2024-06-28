@@ -52,36 +52,32 @@ func GetDAFileLength() (int64, error) {
 	return length, err
 }
 
-func GetRangeDAFileInfo(start uint, end uint) ([]DAFileInfo, error) {
-	var files []DAFileInfoStore
-	var result []DAFileInfo
-	err := GlobalDataBase.Model(&DAFileInfoStore{}).Where("id >= ? and id <= ?", start, end).Find(&files).Error
+func GetFileInfoByID(id uint) (DAFileInfo, error) {
+	var file DAFileInfoStore
+	err := GlobalDataBase.Model(&DAFileInfoStore{}).Where("id = ?", id).First(&file).Error
 	if err != nil {
-		return nil, err
+		return DAFileInfo{}, err
 	}
 
-	result = make([]DAFileInfo, len(files))
-	for index, file := range files {
-		var commit bls12381.G1Affine
-		commitByte, err := hex.DecodeString(file.Commit)
-		if err != nil {
-			return nil, err
-		}
-		_, err = commit.SetBytes(commitByte)
-		if err != nil {
-			return nil, err
-		}
-
-		result[index] = DAFileInfo{
-			Commit:              commit,
-			Size:                file.Size,
-			Expiration:          file.Expiration,
-			ChooseNumber:        file.ChooseNumber,
-			ProvedSuccessNumber: file.ProvedSuccessNumber,
-		}
+	commitByte48, err := hex.DecodeString(file.Commit)
+	if err != nil {
+		return DAFileInfo{}, err
 	}
-	return result, nil
+	var commit bls12381.G1Affine
+	_, err = commit.SetBytes(commitByte48)
+	if err != nil {
+		return DAFileInfo{}, err
+	}
+
+	return DAFileInfo{
+		Commit:              commit,
+		Size:                file.Size,
+		Expiration:          file.Expiration,
+		ChooseNumber:        file.ChooseNumber,
+		ProvedSuccessNumber: file.ProvedSuccessNumber,
+	}, nil
 }
+
 
 func GetFileInfoByCommit(commit bls12381.G1Affine) (DAFileInfo, error) {
 	var file DAFileInfoStore
