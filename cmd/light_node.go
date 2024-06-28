@@ -96,6 +96,10 @@ var lightNodeRunCmd = &cli.Command{
 		if err != nil {
 			log.Fatalf("new light node prover: %s\n", err)
 		}
+		err = prover.RegisterSubmitter()
+		if err != nil {
+			log.Fatalf("register submitter err: %s\n", err)
+		}
 		go prover.ProveDataAccess(cctx)
 
 		challenger, err := light.NewDataAvailabilityChallenger(chain, privateKey)
