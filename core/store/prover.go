@@ -336,3 +336,23 @@ func (p *DataAvailabilityProver) responseChallenge(commits []bls12381.G1Affine) 
 		time.Sleep(5 * time.Second)
 	}
 }
+
+func (p *DataAvailabilityProver) Pledge() error {
+	bal, err := p.proofInstance.GetPledgeBalance(p.submitter)
+	if err != nil {
+		return err
+	}
+	info, err := p.proofInstance.GetSettingInfo()
+	if err != nil {
+		return err
+	}
+
+	if bal.Cmp(info.SubPledge) == -1 {
+		bal.Sub(info.SubPledge, bal)
+		err = p.proofInstance.Pledge(bal)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

@@ -329,3 +329,23 @@ func (p *DataAvailabilityProver) RegisterSubmitter() error {
 	}
 	return nil
 }
+
+func (p *DataAvailabilityProver) Pledge() error {
+	bal, err := p.proofInstance.GetPledgeBalance(userAddr)
+	if err != nil {
+		return err
+	}
+	info, err := p.proofInstance.GetSettingInfo()
+	if err != nil {
+		return err
+	}
+
+	if bal.Cmp(info.SubPledge) == -1 {
+		bal.Sub(info.SubPledge, bal)
+		err = p.proofInstance.Pledge(bal)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
