@@ -26,10 +26,10 @@ type DAChallengeResInfoStore struct {
 
 type DAPenaltyInfo struct {
 	// gorm.Model
-	PenalizedAccount   common.Address
-	RewardedAccount    common.Address
-	RewardAmount       *big.Int
-	ToFoundationAmount *big.Int
+	From            common.Address
+	To              common.Address
+	ToValue         *big.Int
+	FoundationValue *big.Int
 }
 
 type DAPenaltyInfoStore struct {
@@ -144,10 +144,10 @@ func InitDAPenaltyInfoTable() error {
 
 func (p *DAPenaltyInfo) CreateDAPenaltyInfo() error {
 	var info = &DAPenaltyInfoStore{
-		From:            p.PenalizedAccount.Hex(),
-		To:              p.RewardedAccount.Hex(),
-		ToValue:         p.RewardAmount.String(),
-		FoundationValue: p.ToFoundationAmount.String(),
+		From:            p.From.Hex(),
+		To:              p.To.Hex(),
+		ToValue:         p.ToValue.String(),
+		FoundationValue: p.FoundationValue.String(),
 	}
 	return GlobalDataBase.Create(info).Error
 }
@@ -186,10 +186,10 @@ func GetPenaltyByAccount(account common.Address, accountType uint8) ([]DAPenalty
 			return nil, errors.New("bigNum.SetString(penaltyInfoStore.FoundationValue, 10) fail")
 		}
 		penaltyInfo := DAPenaltyInfo{
-			PenalizedAccount:   common.HexToAddress(penaltyInfoStore.From),
-			RewardedAccount:    common.HexToAddress(penaltyInfoStore.To),
-			RewardAmount:       toValue,
-			ToFoundationAmount: fValue,
+			From:            common.HexToAddress(penaltyInfoStore.From),
+			To:              common.HexToAddress(penaltyInfoStore.To),
+			ToValue:         toValue,
+			FoundationValue: fValue,
 		}
 		penaltiesInfo = append(penaltiesInfo, penaltyInfo)
 	}

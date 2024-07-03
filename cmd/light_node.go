@@ -166,7 +166,7 @@ var queryProfitsCmd = &cli.Command{
 			log.Fatal(err)
 		}
 		for _, penalty := range penalties {
-			amount := new(big.Int).Add(penalty.RewardAmount, penalty.ToFoundationAmount)
+			amount := new(big.Int).Add(penalty.ToValue, penalty.FoundationValue)
 			submitPenalty.Add(submitPenalty, amount)
 		}
 
@@ -175,7 +175,7 @@ var queryProfitsCmd = &cli.Command{
 			log.Fatal(err)
 		}
 		for _, reward := range rewards {
-			challengeProfit.Add(challengeProfit, reward.RewardAmount)
+			challengeProfit.Add(challengeProfit, reward.ToValue)
 		}
 
 		fmt.Println("submitProfit:", submitProfit, "\nsubmitPenalty:", submitPenalty, "\nchallengeProfit:", challengeProfit)
