@@ -13,14 +13,14 @@ type DAFileIDInfo struct {
 }
 
 type DAFileIDInfoStore struct {
-	Commit string `gorm:"uniqueIndex;column:commit"`
+	Commitment string `gorm:"uniqueIndex;column:commitment"`
 	Mid    string `gorm:"uniqueIndex;column:mid"`
 }
 
 func (f *DAFileIDInfo) CreateDAFileIDInfo() error {
 	commitByte48 := f.Commit.Bytes()
 	var info = &DAFileIDInfoStore{
-		Commit: hex.EncodeToString(commitByte48[:]),
+		Commitment: hex.EncodeToString(commitByte48[:]),
 		Mid:    f.Mid,
 	}
 	return GlobalDataBase.Create(info).Error
@@ -29,7 +29,7 @@ func (f *DAFileIDInfo) CreateDAFileIDInfo() error {
 func GetFileIDInfoByCommit(commit bls12381.G1Affine) (DAFileIDInfo, error) {
 	var file DAFileIDInfoStore
 	commitByte48 := commit.Bytes()
-	err := GlobalDataBase.Model(&DAFileIDInfoStore{}).Where("commit = ?", hex.EncodeToString(commitByte48[:])).First(&file).Error
+	err := GlobalDataBase.Model(&DAFileIDInfoStore{}).Where("commitment = ?", hex.EncodeToString(commitByte48[:])).First(&file).Error
 
 	return DAFileIDInfo{
 		Commit: commit,

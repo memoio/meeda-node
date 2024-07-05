@@ -18,7 +18,7 @@ type DAFileInfo struct {
 
 type DAFileInfoStore struct {
 	gorm.Model
-	Commit              string `gorm:"uniqueIndex;column:commit"`
+	Commitment          string `gorm:"uniqueIndex;column:commitment"`
 	Size                int64
 	Expiration          int64
 	ChooseNumber        int64
@@ -32,7 +32,7 @@ func InitDAFileInfoTable() error {
 func (f *DAFileInfo) CreateDAFileInfo() error {
 	commitByte48 := f.Commit.Bytes()
 	var info = &DAFileInfoStore{
-		Commit:     hex.EncodeToString(commitByte48[:]),
+		Commitment:     hex.EncodeToString(commitByte48[:]),
 		Size:       f.Size,
 		Expiration: f.Expiration,
 	}
@@ -43,7 +43,7 @@ func (f *DAFileInfo) UpdateDAFileInfo() error {
 	commitByte48 := f.Commit.Bytes()
 	commit := hex.EncodeToString(commitByte48[:])
 
-	return GlobalDataBase.Model(&DAFileInfoStore{}).Where("commit = ?", commit).Updates(map[string]interface{}{"choose_number": f.ChooseNumber, "proved_success_number": f.ChooseNumber}).Error
+	return GlobalDataBase.Model(&DAFileInfoStore{}).Where("commitment = ?", commit).Updates(map[string]interface{}{"choose_number": f.ChooseNumber, "proved_success_number": f.ChooseNumber}).Error
 }
 
 func GetDAFileLength() (int64, error) {
@@ -59,7 +59,7 @@ func GetFileInfoByID(id uint) (DAFileInfo, error) {
 		return DAFileInfo{}, err
 	}
 
-	commitByte48, err := hex.DecodeString(file.Commit)
+	commitByte48, err := hex.DecodeString(file.Commitment)
 	if err != nil {
 		return DAFileInfo{}, err
 	}
@@ -78,11 +78,10 @@ func GetFileInfoByID(id uint) (DAFileInfo, error) {
 	}, nil
 }
 
-
 func GetFileInfoByCommit(commit bls12381.G1Affine) (DAFileInfo, error) {
 	var file DAFileInfoStore
 	commitByte48 := commit.Bytes()
-	err := GlobalDataBase.Model(&DAFileInfoStore{}).Where("commit = ?", hex.EncodeToString(commitByte48[:])).First(&file).Error
+	err := GlobalDataBase.Model(&DAFileInfoStore{}).Where("commitment = ?", hex.EncodeToString(commitByte48[:])).First(&file).Error
 
 	return DAFileInfo{
 		Commit:              commit,
