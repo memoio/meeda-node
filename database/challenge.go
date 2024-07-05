@@ -5,11 +5,9 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"gorm.io/gorm"
 )
 
 type DAChallengeResInfo struct {
-	// gorm.Model
 	Submitter  common.Address
 	Challenger common.Address
 	Last       *big.Int
@@ -17,7 +15,6 @@ type DAChallengeResInfo struct {
 }
 
 type DAChallengeResInfoStore struct {
-	gorm.Model
 	Submitter  string `gorm:"index"`
 	Challenger string `gorm:"index"`
 	Last       string `gorm:"index"`
@@ -25,7 +22,6 @@ type DAChallengeResInfoStore struct {
 }
 
 type DAPenaltyInfo struct {
-	// gorm.Model
 	From            common.Address
 	To              common.Address
 	ToValue         *big.Int
@@ -33,11 +29,10 @@ type DAPenaltyInfo struct {
 }
 
 type DAPenaltyInfoStore struct {
-	gorm.Model
-	From            string `gorm:"index"`
-	To              string `gorm:"index"`
-	ToValue         string
-	FoundationValue string
+	PenalizedAccount string `gorm:"index;column:penalizedaccount"`
+	RewardedAccount  string `gorm:"index;column:rewardedaccount"`
+	RewardValue      string `gorm:"column:rewardvalue"`
+	FoundationValue  string `gorm:"column:foundationvalue"`
 }
 
 func InitDAChallengeResInfoTable() error {
@@ -62,19 +57,19 @@ func GetDAChallengeResLength() (int64, error) {
 }
 
 func GetChallengeResByAccount(account common.Address, accountType uint8) ([]DAChallengeResInfo, error) {
-	var results []DAChallengeResInfoStore
+	results := []DAChallengeResInfoStore{}
 	var err error
 	switch accountType {
 	case 0:
-		err = GlobalDataBase.Model(&DAChallengeResInfoStore{}).Where("submitter <> ?", account.Hex()).Find(&results).Error
+		err = GlobalDataBase.Model(&DAChallengeResInfoStore{}).Where("submitter = ?", account.Hex()).Find(&results).Error
 	default:
-		err = GlobalDataBase.Model(&DAChallengeResInfoStore{}).Where("challenger <> ?", account.Hex()).Find(&results).Error
+		err = GlobalDataBase.Model(&DAChallengeResInfoStore{}).Where("challenger = ?", account.Hex()).Find(&results).Error
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	var resInfo []DAChallengeResInfo
+	resInfo := []DAChallengeResInfo{}
 	var ok bool
 	bigNum, last := new(big.Int), new(big.Int)
 
@@ -96,13 +91,13 @@ func GetChallengeResByAccount(account common.Address, accountType uint8) ([]DACh
 }
 
 func GetChallengeResByLast(last *big.Int) ([]DAChallengeResInfo, error) {
-	var results []DAChallengeResInfoStore
-	err := GlobalDataBase.Model(&DAChallengeResInfoStore{}).Where("last <> ?", last.String()).Find(&results).Error
+	results := []DAChallengeResInfoStore{}
+	err := GlobalDataBase.Model(&DAChallengeResInfoStore{}).Where("last = ?", last.String()).Find(&results).Error
 	if err != nil {
 		return nil, err
 	}
 
-	var resInfo []DAChallengeResInfo
+	resInfo := []DAChallengeResInfo{}
 	var ok bool
 	bigNum, last := new(big.Int), new(big.Int)
 
@@ -144,10 +139,10 @@ func InitDAPenaltyInfoTable() error {
 
 func (p *DAPenaltyInfo) CreateDAPenaltyInfo() error {
 	var info = &DAPenaltyInfoStore{
-		From:            p.From.Hex(),
-		To:              p.To.Hex(),
-		ToValue:         p.ToValue.String(),
-		FoundationValue: p.FoundationValue.String(),
+		PenalizedAccount: p.From.Hex(),
+		RewardedAccount:  p.To.Hex(),
+		RewardValue:      p.ToValue.String(),
+		FoundationValue:  p.FoundationValue.String(),
 	}
 	return GlobalDataBase.Create(info).Error
 }
@@ -160,34 +155,34 @@ func GetDAPenaltyLength() (int64, error) {
 }
 
 func GetPenaltyByAccount(account common.Address, accountType uint8) ([]DAPenaltyInfo, error) {
-	var penalties []DAPenaltyInfoStore
+	penalties := []DAPenaltyInfoStore{}
 	var err error
 	switch accountType {
 	case 0:
-		err = GlobalDataBase.Model(&DAPenaltyInfoStore{}).Where("from <> ?", account.Hex()).Find(&penalties).Error
+		err = GlobalDataBase.Model(&DAPenaltyInfoStore{}).Where("penalizedaccount = ?", account.Hex()).Find(&penalties).Error
 	default:
-		err = GlobalDataBase.Model(&DAPenaltyInfoStore{}).Where("to <> ?", account.Hex()).Find(&penalties).Error
+		err = GlobalDataBase.Model(&DAPenaltyInfoStore{}).Where("rewardedaccount = ?", account.Hex()).Find(&penalties).Error
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	var penaltiesInfo []DAPenaltyInfo
+	penaltiesInfo := []DAPenaltyInfo{}
 	var ok bool
 	bigNum, toValue, fValue := new(big.Int), new(big.Int), new(big.Int)
 
 	for _, penaltyInfoStore := range penalties {
-		toValue, ok = bigNum.SetString(penaltyInfoStore.ToValue, 10)
+		toValue, ok = bigNum.SetString(penaltyInfoStore.RewardValue, 10)
 		if !ok {
-			return nil, errors.New("bigNum.SetString(penaltyInfoStore.ToValue, 10) fail")
+			return nil, errors.New("bigNum.SetString(penaltyInfoStore.RewardValue, 10) fail")
 		}
 		fValue, ok = bigNum.SetString(penaltyInfoStore.FoundationValue, 10)
 		if !ok {
 			return nil, errors.New("bigNum.SetString(penaltyInfoStore.FoundationValue, 10) fail")
 		}
 		penaltyInfo := DAPenaltyInfo{
-			From:            common.HexToAddress(penaltyInfoStore.From),
-			To:              common.HexToAddress(penaltyInfoStore.To),
+			From:            common.HexToAddress(penaltyInfoStore.PenalizedAccount),
+			To:              common.HexToAddress(penaltyInfoStore.RewardedAccount),
 			ToValue:         toValue,
 			FoundationValue: fValue,
 		}

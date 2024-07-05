@@ -30,8 +30,6 @@ type DataAvailabilityChallenger struct {
 	last               int64
 
 	lastRnd    fr.Element
-	startIndex uint
-	endIndex   uint
 }
 
 func NewDataAvailabilityChallenger(chain string, sk *ecdsa.PrivateKey) (*DataAvailabilityChallenger, error) {
@@ -105,6 +103,7 @@ func (c *DataAvailabilityChallenger) ChallengeAggregatedCommits(ctx context.Cont
 		c.lastRnd = *c.lastRnd.SetBytes(_rnd[:])
 	}
 
+	var proofs []database.DAProofInfo
 	for {
 		wait := c.calculateWatingTime()
 		select {
@@ -113,13 +112,26 @@ func (c *DataAvailabilityChallenger) ChallengeAggregatedCommits(ctx context.Cont
 		case <-time.After(wait):
 		}
 
+		for _, proof := range proofs {
+			err := c.handleProveResult(proof)
+			if err != nil {
+				logger.Error(err.Error())
+			}
+		}
+
+		err := c.proofInstance.GenerateRnd()
+		if err != nil {
+			logger.Error(err.Error())
+			continue
+		}
+
 		rndBytes, err := c.proofInstance.GetRndRawBytes()
 		if err != nil {
 			logger.Error(err.Error())
 			continue
 		}
 
-		proofs, err := c.getAggregatedProofs(rndBytes)
+		proofs, err = c.getAggregatedProofs(rndBytes)
 		if err != nil {
 			logger.Error(err.Error())
 			continue
@@ -140,7 +152,6 @@ func (c *DataAvailabilityChallenger) ChallengeAggregatedCommits(ctx context.Cont
 			err = kzg.Verify(&proof.Commits, &proof.Proof, proof.Rnd, c.verifyKey)
 			if err != nil {
 				logger.Info("Submitted proof is wrong, so we start chanllenge. Submitter:", proof.Submitter.Hex(), " Cycle:", time.Unix(proof.Last.Int64(), 0).Format("2006-01-02 15:04:05"))
-				//errProofs = append(errProofs, proof)
 				go func(submitter common.Address) {
 					err := c.proofInstance.ChallengePn(submitter)
 					if err != nil {
@@ -165,13 +176,6 @@ func (c *DataAvailabilityChallenger) ChallengeAggregatedCommits(ctx context.Cont
 				continue
 			} else {
 				logger.Info("Submitted proof is correct! Submitter:", proof.Submitter.Hex(), " Cycle:", time.Unix(proof.Last.Int64(), 0).Format("2006-01-02 15:04:05"))
-			}
-		}
-
-		for _, proof := range proofs {
-			err = c.handleProveResult(proof)
-			if err != nil {
-				logger.Error(err.Error())
 			}
 		}
 	}
@@ -209,7 +213,7 @@ func (c *DataAvailabilityChallenger) selectFiles(submitter common.Address, rndBy
 	}
 
 	big2 := big.NewInt(2)
-	var random *big.Int = big.NewInt(0).SetBytes(rndBytes[:])
+	random := big.NewInt(0).SetBytes(rndBytes[:])
 	random = new(big.Int).Mod(random, length)
 	startIndex := new(big.Int).Div(random, big2).Int64()
 

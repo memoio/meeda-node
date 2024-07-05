@@ -48,7 +48,7 @@ func InitDatabase(path string) error {
 	if err != nil {
 		return err
 	}
-	db.AutoMigrate(&DAFileInfoStore{}, &DAFileIDInfoStore{}, &DAProofInfoStore{}, &DABlockNumber{})
+	db.AutoMigrate(&DAFileInfoStore{}, &DAFileIDInfoStore{}, &DAProofInfoStore{}, &DABlockNumber{}, &DAChallengeResInfoStore{}, &DAPenaltyInfoStore{})
 	GlobalDataBase = db
 	return nil
 }

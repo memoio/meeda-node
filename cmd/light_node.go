@@ -143,15 +143,21 @@ var queryProfitsCmd = &cli.Command{
 	Usage: "query this node's profit of submitProof and challenge",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:  "address",
-			Usage: "input this meeda light node's account address",
+			Name:     "address",
+			Required: true,
+			Usage:    "input this meeda light node's account address",
 		},
 	},
 	Action: func(ctx *cli.Context) error {
 		address := common.HexToAddress(ctx.String("address"))
 		submitProfit := big.NewInt(0)
 		challengeProfit := big.NewInt(0)
-		submitPenalty := big.NewInt(0)
+		challengePenalty := big.NewInt(0)
+
+		err := database.InitDatabase("~/.meeda-light")
+		if err != nil {
+			return err
+		}
 
 		proofs, err := database.GetDAProofsBySubmitter(address)
 		if err != nil {
@@ -167,7 +173,7 @@ var queryProfitsCmd = &cli.Command{
 		}
 		for _, penalty := range penalties {
 			amount := new(big.Int).Add(penalty.ToValue, penalty.FoundationValue)
-			submitPenalty.Add(submitPenalty, amount)
+			challengePenalty.Add(challengePenalty, amount)
 		}
 
 		rewards, err := database.GetPenaltyByAccount(address, 1)
@@ -178,7 +184,7 @@ var queryProfitsCmd = &cli.Command{
 			challengeProfit.Add(challengeProfit, reward.ToValue)
 		}
 
-		fmt.Println("submitProfit:", submitProfit, "\nsubmitPenalty:", submitPenalty, "\nchallengeProfit:", challengeProfit)
+		fmt.Println("submitProfit:", submitProfit, "\nchallengeProfit:", challengeProfit, "\nchallengePenalty:", challengePenalty)
 		return nil
 	},
 }

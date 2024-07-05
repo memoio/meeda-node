@@ -76,13 +76,13 @@ func GetDAProofBySubmitterAndRnd(submitter common.Address, rnd fr.Element) (DAPr
 }
 
 func GetDAProofsByRnd(rnd fr.Element) ([]DAProofInfo, error) {
-	var proofs []DAProofInfoStore
-	err := GlobalDataBase.Model(&DAPenaltyInfoStore{}).Where("rnd = ?", rnd.String()).Find(&proofs).Error
+	proofs := []DAProofInfoStore{}
+	err := GlobalDataBase.Model(&DAProofInfoStore{}).Where("rnd = ?", rnd.String()).Find(&proofs).Error
 	if err != nil {
 		return nil, err
 	}
 
-	var proofsInfo []DAProofInfo
+	proofsInfo := []DAProofInfo{}
 	for _, proof := range proofs {
 		proofInfo, err := proofStoreToProof(proof)
 		if err != nil {
@@ -95,13 +95,13 @@ func GetDAProofsByRnd(rnd fr.Element) ([]DAProofInfo, error) {
 }
 
 func GetDAProofsBySubmitter(submitter common.Address) ([]DAProofInfo, error) {
-	var proofs []DAProofInfoStore
-	err := GlobalDataBase.Model(&DAPenaltyInfoStore{}).Where("submitter = ?", submitter.Hex()).Find(&proofs).Error
+	proofs := []DAProofInfoStore{}
+	err := GlobalDataBase.Model(&DAProofInfoStore{}).Where("submitter = ?", submitter.Hex()).Find(&proofs).Error
 	if err != nil {
 		return nil, err
 	}
 
-	var proofsInfo []DAProofInfo
+	proofsInfo := []DAProofInfo{}
 	for _, proof := range proofs {
 		proofInfo, err := proofStoreToProof(proof)
 		if err != nil {

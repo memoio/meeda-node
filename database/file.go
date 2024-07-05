@@ -82,7 +82,7 @@ func GetFileInfoByID(id uint) (DAFileInfo, error) {
 func GetFileInfoByCommit(commit bls12381.G1Affine) (DAFileInfo, error) {
 	var file DAFileInfoStore
 	commitByte48 := commit.Bytes()
-	err := GlobalDataBase.Model(&DAFileInfoStore{}).Where("\"commit\" = ?", hex.EncodeToString(commitByte48[:])).First(&file).Error
+	err := GlobalDataBase.Model(&DAFileInfoStore{}).Where("commit = ?", hex.EncodeToString(commitByte48[:])).First(&file).Error
 
 	return DAFileInfo{
 		Commit:              commit,
