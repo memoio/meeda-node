@@ -8,6 +8,7 @@ import (
 
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr/kzg"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -15,23 +16,20 @@ import (
 	inst "github.com/memoio/contractsv2/go_contracts/instance"
 	proof "github.com/memoio/go-did/file-proof"
 	"github.com/memoio/meeda-node/database"
-	"golang.org/x/xerrors"
 )
 
 type DataAvailabilityChallenger struct {
 	endpoint           string
 	proofProxyAddr     common.Address
 	proofInstance      proof.ProofInstance
+	verifyKey          kzg.VerifyingKey
 	selectedFileNumber int64
 	interval           time.Duration
 	period             time.Duration
 	respondTime        int64
 	last               int64
 
-	lastRnd       fr.Element
-	startIndex    uint
-	endIndex      uint
-	provedSuccess bool
+	lastRnd    fr.Element
 }
 
 func NewDataAvailabilityChallenger(chain string, sk *ecdsa.PrivateKey) (*DataAvailabilityChallenger, error) {
@@ -68,11 +66,13 @@ func NewDataAvailabilityChallenger(chain string, sk *ecdsa.PrivateKey) (*DataAva
 		endpoint:           endpoint,
 		proofProxyAddr:     proofProxyAddr,
 		proofInstance:      *instance,
+		verifyKey:          DefaultSRS.Vk,
 		selectedFileNumber: int64(info.ChalSum),
 		interval:           time.Duration(info.Interval) * time.Second,
 		period:             time.Duration(info.Period) * time.Second,
 		respondTime:        int64(info.RespondTime),
 		last:               0,
+		lastRnd:            fr.Element{},
 	}, nil
 }
 
@@ -83,15 +83,27 @@ func (c *DataAvailabilityChallenger) ChallengeAggregatedCommits(ctx context.Cont
 			return
 		case <-time.After(5 * time.Second):
 		}
-		rnd, _, lastTime, err := c.proofInstance.GetVerifyInfo()
+		err := c.proofInstance.GenerateRnd()
 		if err != nil {
 			logger.Error(err.Error())
 			continue
 		}
+		lastTime, err := c.proofInstance.GetLast()
+		if err != nil {
+			logger.Error(err.Error())
+			continue
+		}
+		_rnd, err := c.proofInstance.GetRndRawBytes()
+		if err != nil {
+			logger.Error(err.Error())
+			continue
+		}
+
 		c.last = lastTime.Int64()
-		c.lastRnd = rnd
+		c.lastRnd = *c.lastRnd.SetBytes(_rnd[:])
 	}
 
+	var proofs []database.DAProofInfo
 	for {
 		wait := c.calculateWatingTime()
 		select {
@@ -100,45 +112,74 @@ func (c *DataAvailabilityChallenger) ChallengeAggregatedCommits(ctx context.Cont
 		case <-time.After(wait):
 		}
 
+		for _, proof := range proofs {
+			err := c.handleProveResult(proof)
+			if err != nil {
+				logger.Error(err.Error())
+			}
+		}
+
+		err := c.proofInstance.GenerateRnd()
+		if err != nil {
+			logger.Error(err.Error())
+			continue
+		}
+
 		rndBytes, err := c.proofInstance.GetRndRawBytes()
 		if err != nil {
 			logger.Error(err.Error())
 			continue
 		}
 
-		proof, err := c.getAggregatedProof(rndBytes)
+		proofs, err = c.getAggregatedProofs(rndBytes)
 		if err != nil {
 			logger.Error(err.Error())
 			continue
 		}
 
-		if c.lastRnd.Equal(&proof.Rnd) {
+		if len(proofs) == 0 {
+			logger.Info("get no proof at this cycle, last:", c.last)
+			continue
+		}
+
+		if c.lastRnd.Equal(&proofs[0].Rnd) {
 			logger.Error("Rnd shouldn't be equal to last one, maybe sunmitter do not submit proof")
 			continue
 		}
-		c.lastRnd = proof.Rnd
+		c.lastRnd = proofs[0].Rnd
 
-		commits, err := c.selectCommits(rndBytes)
-		if err != nil {
-			logger.Error(err.Error())
-			continue
-		}
-
-		if !checkAggregateCommits(commits, proof.Commits) {
-			logger.Info("submitted proof is wrong, so we start chanllenge")
-			c.provedSuccess = false
-			err := c.challenge(commits)
+		for _, proof := range proofs {
+			if proof.Submitter==userAddr {
+				continue
+			}
+			err = kzg.Verify(&proof.Commits, &proof.Proof, proof.Rnd, c.verifyKey)
+			if err != nil {
+				logger.Info("Submitted proof is wrong, so we start chanllenge. Submitter:", proof.Submitter.Hex(), " Cycle:", time.Unix(proof.Last.Int64(), 0).Format("2006-01-02 15:04:05"))
+				go func(submitter common.Address) {
+					err := c.proofInstance.ChallengePn(submitter)
+					if err != nil {
+						logger.Error(err.Error())
+					}
+				}(proof.Submitter)
+				continue
+			}
+			commits, err := c.selectCommits(proof.Submitter, rndBytes)
 			if err != nil {
 				logger.Error(err.Error())
+				continue
 			}
-		} else {
-			c.provedSuccess = true
-			logger.Info("submitted proof is correct")
-		}
-
-		err = c.handleProveResult()
-		if err != nil {
-			logger.Error(err.Error())
+			if !checkAggregateCommits(commits, proof.Commits) {
+				logger.Info("Submitted commit is wrong, so we start chanllenge. Submitter:", proof.Submitter.Hex(), " Cycle:", time.Unix(proof.Last.Int64(), 0).Format("2006-01-02 15:04:05"))
+				go func(submitter common.Address, commits []bls12381.G1Affine) {
+					err := c.challengeCn(submitter, commits)
+					if err != nil {
+						logger.Error(err.Error())
+					}
+				}(proof.Submitter, commits)
+				continue
+			} else {
+				logger.Info("Submitted proof is correct! Submitter:", proof.Submitter.Hex(), " Cycle:", time.Unix(proof.Last.Int64(), 0).Format("2006-01-02 15:04:05"))
+			}
 		}
 	}
 }
@@ -156,104 +197,103 @@ func (c *DataAvailabilityChallenger) calculateWatingTime() time.Duration {
 	return time.Duration(waitingSeconds) * time.Second
 }
 
-func (c *DataAvailabilityChallenger) getAggregatedProof(rndBytes [32]byte) (database.DAProofInfo, error) {
+func (c *DataAvailabilityChallenger) getAggregatedProofs(rndBytes [32]byte) ([]database.DAProofInfo, error) {
 	var rnd fr.Element
 	rnd.SetBytes(rndBytes[:])
-	proof, err := database.GetDAProofByRnd(rnd)
+	proofs, err := database.GetDAProofsByRnd(rnd)
 	if err != nil {
-		return database.DAProofInfo{}, err
+		return nil, err
 	}
 
-	return proof, nil
+	return proofs, nil
 }
 
-func (c *DataAvailabilityChallenger) selectCommits(rndBytes [32]byte) ([]bls12381.G1Affine, error) {
-	var commits []bls12381.G1Affine = make([]bls12381.G1Affine, c.selectedFileNumber)
-	info, err := c.proofInstance.GetChallengeInfo()
-	if err != nil {
-		return nil, err
-	}
-	length := info.ChalLength.Int64()
-
-	var random *big.Int = big.NewInt(0).SetBytes(rndBytes[:])
-	random = new(big.Int).Mod(random, big.NewInt(length))
-	startIndex := new(big.Int).Div(random, big.NewInt(2)).Int64()
-
-	var endIndex int64
-	if c.selectedFileNumber > length {
-		endIndex = startIndex + (length-1)/2
-	} else {
-		endIndex = startIndex + (c.selectedFileNumber-1)/2
-	}
-	c.startIndex = uint(startIndex + 1)
-	c.endIndex = uint(endIndex + 1)
-
-	files, err := database.GetRangeDAFileInfo(uint(startIndex+1), uint(endIndex+1))
+func (c *DataAvailabilityChallenger) selectFiles(submitter common.Address, rndBytes [32]byte) ([]database.DAFileInfo, error) {
+	var files []database.DAFileInfo = make([]database.DAFileInfo, c.selectedFileNumber)
+	length, err := c.proofInstance.GetFilesAmount()
 	if err != nil {
 		return nil, err
 	}
 
-	var tmpCommits = make([]bls12381.G1Affine, len(files))
-	for index, file := range files {
-		if file.Expiration > c.last {
-			tmpCommits[index] = file.Commit
-		} else {
-			tmpCommits[index] = zeroCommit
+	big2 := big.NewInt(2)
+	random := big.NewInt(0).SetBytes(rndBytes[:])
+	random = new(big.Int).Mod(random, length)
+	startIndex := new(big.Int).Div(random, big2).Int64()
+
+	var tmpIndex int64
+	tmpInt := new(big.Int)
+	submitterInt := submitter.Big()
+	for i := int64(0); i < c.selectedFileNumber; i++ {
+		tmpInt.Mul(big.NewInt(i), submitterInt)
+		tmpInt.Mod(tmpInt, length)
+		tmpIndex = tmpInt.Div(tmpInt, big2).Int64()
+		tmpIndex += startIndex
+		file, err := database.GetFileInfoByID(uint(tmpIndex + 1))
+		if err != nil {
+			return nil, err
 		}
+		files[i] = file
 	}
 
-	for index := 0; index < int(c.selectedFileNumber); index++ {
-		commits[index] = tmpCommits[index%int(length)/2]
+	return files, nil
+}
+
+func (c *DataAvailabilityChallenger) selectCommits(submitter common.Address, rndBytes [32]byte) ([]bls12381.G1Affine, error) {
+	var commits []bls12381.G1Affine = make([]bls12381.G1Affine, c.selectedFileNumber)
+	files, err := c.selectFiles(submitter, rndBytes)
+	if err != nil {
+		return nil, err
+	}
+	for i := int64(0); i < c.selectedFileNumber; i++ {
+		if files[i].Expiration > c.last {
+			commits[i] = files[i].Commit
+		} else {
+			commits[i] = zeroCommit
+		}
 	}
 
 	return commits, nil
 }
 
-func (c *DataAvailabilityChallenger) challenge(commits []bls12381.G1Affine) error {
-	err := c.proofInstance.Challenge(0)
+func (c *DataAvailabilityChallenger) challengeCn(submitter common.Address, commits []bls12381.G1Affine) error {
+	err := c.proofInstance.ChallengeCn(submitter, 0)
 	if err != nil {
 		return err
 	}
 
 	for {
-		info, err := c.proofInstance.GetChallengeInfo()
+		info, err := c.proofInstance.GetChallengeInfo(submitter)
 		if err != nil {
 			return err
 		}
 
-		if info.ChalStatus%2 == 1 {
-			if time.Now().Unix() > c.last+c.respondTime*int64(info.ChalStatus+1) {
-				err = c.proofInstance.EndChallenge()
+		if info.Status%2 == 1 {
+			if time.Now().Unix() > c.last+c.respondTime*int64(info.Status+1) {
+				err = c.proofInstance.EndChallenge(submitter)
 				if err != nil {
 					return err
 				}
 				logger.Info("we success because they failed generate aggregate commit")
 				return nil
 			}
-		} else if info.ChalStatus == 0 {
+		} else if info.Status == 11 {
 			fail, err := c.proofInstance.IsSubmitterWinner()
 			if err != nil {
 				return err
 			}
 			if fail {
-				c.provedSuccess = true
 				logger.Info("we failed because the submitter success on the last prove")
 			} else {
 				logger.Info("we success because the submitter failed on the last prove")
 			}
-
 			return nil
 		} else {
-			logger.Infof("challenge-%d", info.ChalStatus)
-			cns, err := c.getResponseCommits()
-			if err != nil {
-				return err
-			}
-
+			logger.Infof("challenge-%d", info.Status)
+			cns := info.DividedCn
 			var splitLength = len(commits) / 10
 			for index, cn := range cns {
-				if !checkAggregateCommits(commits[splitLength*index:splitLength*(index+1)], cn) {
-					err = c.proofInstance.Challenge(uint8(index))
+				if !checkAggregateCommits(commits[splitLength*index:splitLength*(index+1)], proof.FromSolidityG1(cn)) {
+					err = c.proofInstance.ChallengeCn(submitter, uint8(index))
 					if err != nil {
 						return err
 					}
@@ -262,81 +302,25 @@ func (c *DataAvailabilityChallenger) challenge(commits []bls12381.G1Affine) erro
 				}
 			}
 		}
-
 		time.Sleep(5 * time.Second)
 	}
 }
 
-func (c *DataAvailabilityChallenger) getResponseCommits() ([10]bls12381.G1Affine, error) {
-	client, err := ethclient.DialContext(context.TODO(), c.endpoint)
-	if err != nil {
-		return [10]bls12381.G1Affine{}, err
-	}
-	defer client.Close()
-
-	blockNumber, err := client.BlockNumber(context.TODO())
-	if err != nil {
-		return [10]bls12381.G1Affine{}, err
-	}
-
-	for number := blockNumber; number > 0; number-- {
-		block, err := client.BlockByNumber(context.TODO(), big.NewInt(int64(number)))
-		if err != nil {
-			return [10]bls12381.G1Affine{}, err
-		}
-		for _, tx := range block.Transactions() {
-			if tx != nil {
-				if tx.To() != nil {
-					if tx.To().Hex() == c.proofProxyAddr.Hex() {
-						out, err := unpackChallenge(tx.Data()[4:])
-						if err != nil {
-							continue
-						}
-
-						var commits [10]bls12381.G1Affine
-						for index, cn := range out {
-							commits[index] = proof.FromSolidityG1(cn)
-						}
-
-						return commits, nil
-					}
-				}
-			}
-		}
-	}
-	return [10]bls12381.G1Affine{}, nil
-}
-
-func (c *DataAvailabilityChallenger) handleProveResult() error {
-	files, err := database.GetRangeDAFileInfo(c.startIndex, c.endIndex)
+func (c *DataAvailabilityChallenger) handleProveResult(proof database.DAProofInfo) error {
+	files, err := c.selectFiles(proof.Submitter, proof.Rnd.Bytes())
 	if err != nil {
 		return err
 	}
 
-	length := int64(len(files))
-	total := c.selectedFileNumber / 2
-	cycle := total / length
-	over := total % length
-
-	for i := int64(0); i < over; i++ {
-		if files[i].Expiration <= c.last {
-			files[i].ChooseNumber = files[i].ChooseNumber + 2
-			if c.provedSuccess {
-				files[i].ProvedSuccessNumber = files[i].ProvedSuccessNumber + 2
-			}
-		}
-	}
-
-	for _, file := range files {
-		if file.Expiration <= c.last {
-			file.ChooseNumber = file.ChooseNumber + 2*cycle
-			if c.provedSuccess {
-				file.ProvedSuccessNumber = file.ProvedSuccessNumber + 2*cycle
-			}
-
-			err = file.UpdateDAFileInfo()
-			if err != nil {
-				return err
+	challengeRes, err := database.GetChallengeResBySubmitterAndLast(proof.Submitter, proof.Last)
+	if err != nil || challengeRes.Res {
+		for _, file := range files {
+			if file.Expiration >= c.last {
+				file.ChooseNumber++
+				err = file.UpdateDAFileInfo()
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -350,20 +334,4 @@ func checkAggregateCommits(commits []bls12381.G1Affine, aggregateCommit bls12381
 		foldedCommit.Add(&foldedCommit, &commits[index])
 	}
 	return foldedCommit.Equal(&aggregateCommit)
-}
-
-func unpackChallenge(data []byte) ([10][4][32]byte, error) {
-	if len(data) != 10*4*32 {
-		return [10][4][32]byte{}, xerrors.New("can't match")
-	}
-
-	var res [10][4][32]byte
-	for x := 0; x < 10; x++ {
-		for y := 0; y < 4; y++ {
-			index := x*4 + y
-			copy(res[x][y][:], data[index*32:(index+1)*32])
-		}
-	}
-
-	return res, nil
 }

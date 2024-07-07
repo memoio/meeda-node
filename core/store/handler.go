@@ -146,9 +146,10 @@ func putObjectHandler(c *gin.Context) {
 	}
 
 	// 记录commit => mid的映射
+	mid := genCid(databyte)
 	var fileInfo = database.DAFileIDInfo{
 		Commit: commit,
-		Mid:    genCid(databyte),
+		Mid:    mid,
 	}
 	err = fileInfo.CreateDAFileIDInfo()
 	if err != nil {
@@ -165,6 +166,7 @@ func putObjectHandler(c *gin.Context) {
 		"start":     start.Unix(),
 		"end":       end.Unix(),
 		"signature": hex.EncodeToString(signature),
+		"mid":       mid,
 	})
 }
 

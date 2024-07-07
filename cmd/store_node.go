@@ -98,6 +98,10 @@ var storeNodeRunCmd = &cli.Command{
 		if err != nil {
 			log.Fatalf("new store node prover: %s\n", err)
 		}
+		err = prover.Pledge()
+		if err != nil {
+			log.Fatalf("store node pledge err: %s\n", err)
+		}
 		go prover.ProveDataAccess(cctx)
 
 		srv, err := NewStoreServer(endPoint)

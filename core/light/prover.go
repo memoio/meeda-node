@@ -1,9 +1,9 @@
-package store
+package light
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -11,16 +11,13 @@ import (
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr/kzg"
-	"github.com/ethereum/go-ethereum/common"
 	proof "github.com/memoio/go-did/file-proof"
 	"github.com/memoio/meeda-node/database"
-	"github.com/memoio/meeda-node/gateway"
 	"github.com/memoio/meeda-node/utils"
 )
 
 type DataAvailabilityProver struct {
 	proofInstance      proof.ProofInstance
-	submitter          common.Address
 	selectedFileNumber int64
 	provingKey         kzg.ProvingKey
 	interval           time.Duration
@@ -40,14 +37,8 @@ func NewDataAvailabilityProver(chain string, sk *ecdsa.PrivateKey) (*DataAvailab
 		return nil, err
 	}
 
-	submittersInfo, err := instance.GetSubmittersInfo()
-	if err != nil {
-		return nil, err
-	}
-
 	return &DataAvailabilityProver{
 		proofInstance:      *instance,
-		submitter:          submittersInfo.MainSubmitter,
 		selectedFileNumber: int64(info.ChalSum),
 		provingKey:         DefaultSRS.Pk,
 		interval:           time.Duration(info.Interval) * time.Second,
@@ -62,6 +53,7 @@ func (p *DataAvailabilityProver) ProveDataAccess(ctx context.Context) {
 	var nowRnd fr.Element
 	var finalExpire *big.Int
 	var proveSuccess bool
+
 	for p.last == 0 {
 		select {
 		case <-ctx.Done():
@@ -159,13 +151,13 @@ func (p *DataAvailabilityProver) calculateWatingTime() (time.Duration, int64) {
 }
 
 func (p *DataAvailabilityProver) resetChallengeStatus() error {
-	info, err := p.proofInstance.GetChallengeInfo(p.submitter)
+	info, err := p.proofInstance.GetChallengeInfo(userAddr)
 	if err != nil {
 		return err
 	}
 
 	if info.Status != 0 && info.Status != 11 {
-		return p.proofInstance.EndChallenge(p.submitter)
+		return p.proofInstance.EndChallenge(userAddr)
 	}
 
 	return nil
@@ -212,7 +204,7 @@ func (p *DataAvailabilityProver) selectFiles(rnd fr.Element) ([]bls12381.G1Affin
 
 	var tmpIndex int64
 	tmpInt := new(big.Int)
-	submitterInt := p.submitter.Big()
+	submitterInt := userAddr.Big()
 	for i := int64(0); i < p.selectedFileNumber; i++ {
 		tmpInt.Mul(big.NewInt(i), submitterInt)
 		tmpInt.Mod(tmpInt, length)
@@ -224,17 +216,16 @@ func (p *DataAvailabilityProver) selectFiles(rnd fr.Element) ([]bls12381.G1Affin
 		}
 
 		if file.Expiration > p.last {
-			var w bytes.Buffer
 			id, err := database.GetFileIDInfoByCommit(file.Commit)
 			if err != nil {
 				return nil, nil, err
 			}
-			err = daStore.GetObject(context.TODO(), id.Mid, &w, gateway.ObjectOptions{})
+			data, _, err := getObjectFromStoreNode(baseUrl, id.Mid)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, errors.New(err.Error())
 			}
 
-			poly := utils.SplitData(w.Bytes())
+			poly := utils.SplitData(data)
 			proof, err := kzg.Open(poly, rnd, p.provingKey)
 			if err != nil {
 				return nil, nil, err
@@ -270,18 +261,6 @@ func (p *DataAvailabilityProver) proveToContract(commits []bls12381.G1Affine, pr
 		foldedValue.Add(&foldedValue, &proofs[index].ClaimedValue)
 	}
 
-	// var tmpCommit []bls12381.G1Affine
-	// var aggregatedCommits [10]bls12381.G1Affine
-	// var splitLength = len(commits) / 10
-	// for i := 0; i < 10; i++ {
-	// 	tmpCommit = commits[i*splitLength : (i+1)*splitLength]
-	// 	var aggregatedCommit bls12381.G1Affine = tmpCommit[0]
-	// 	for _, commit := range tmpCommit[1:] {
-	// 		aggregatedCommit.Add(&aggregatedCommit, &commit)
-	// 	}
-	// 	aggregatedCommits[i] = aggregatedCommit
-	// }
-
 	foldedProof.H = foldedPi
 	foldedProof.ClaimedValue = foldedValue
 
@@ -294,7 +273,7 @@ func (p *DataAvailabilityProver) proveToContract(commits []bls12381.G1Affine, pr
 func (p *DataAvailabilityProver) responseChallenge(commits []bls12381.G1Affine) error {
 	var splitedCommits [10][]bls12381.G1Affine
 	for {
-		info, err := p.proofInstance.GetChallengeInfo(p.submitter)
+		info, err := p.proofInstance.GetChallengeInfo(userAddr)
 		if err != nil {
 			return err
 		}
@@ -302,7 +281,7 @@ func (p *DataAvailabilityProver) responseChallenge(commits []bls12381.G1Affine) 
 		if info.Status%2 == 0 {
 			if time.Now().Unix() > p.last+p.respondTime*int64(info.Status+1) {
 				if info.Status != 0 {
-					return p.proofInstance.EndChallenge(p.submitter)
+					return p.proofInstance.EndChallenge(userAddr)
 				} else {
 					return nil
 				}
@@ -337,8 +316,22 @@ func (p *DataAvailabilityProver) responseChallenge(commits []bls12381.G1Affine) 
 	}
 }
 
+func (p *DataAvailabilityProver) RegisterSubmitter() error {
+	is, err := p.proofInstance.IsSubmitter(userAddr)
+	if err != nil {
+		return err
+	}
+	if !is {
+		err = p.proofInstance.BeSubmitter()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (p *DataAvailabilityProver) Pledge() error {
-	bal, err := p.proofInstance.GetPledgeBalance(p.submitter)
+	bal, err := p.proofInstance.GetPledgeBalance(userAddr)
 	if err != nil {
 		return err
 	}

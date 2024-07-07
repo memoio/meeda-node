@@ -1,27 +1,34 @@
 package database
 
 import (
+	"errors"
+	"math/big"
 	"strings"
 
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr/kzg"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type DAProofInfo struct {
 	// gorm.Model
-	Rnd     fr.Element
-	Commits bls12381.G1Affine
-	Proof   kzg.OpeningProof
-	Result  bool
+	Submitter common.Address
+	Rnd       fr.Element
+	Commits   bls12381.G1Affine
+	Proof     kzg.OpeningProof
+	Last      *big.Int
+	Profit    *big.Int
 }
 
 type DAProofInfoStore struct {
+	Submitter    string
 	Rnd          string
 	Commits      string
 	H            string
 	ClaimedValue string
-	Result       bool
+	Last         string
+	Profit       string
 }
 
 func InitDAProofInfoTable() error {
@@ -30,11 +37,13 @@ func InitDAProofInfoTable() error {
 
 func (p *DAProofInfo) CreateDAProofInfo() error {
 	var info = &DAProofInfoStore{
+		Submitter:    p.Submitter.Hex(),
 		Rnd:          p.Rnd.String(),
 		Commits:      p.Commits.X.String() + " | " + p.Commits.Y.String(),
-		H:            p.Proof.H.X.String() + " | " + p.Commits.Y.String(),
+		H:            p.Proof.H.X.String() + " | " + p.Proof.H.Y.String(),
 		ClaimedValue: p.Proof.ClaimedValue.String(),
-		Result:       p.Result,
+		Last:         p.Last.String(),
+		Profit:       p.Profit.String(),
 	}
 	return GlobalDataBase.Create(info).Error
 }
@@ -56,14 +65,52 @@ func GetLastDAProof() (DAProofInfo, error) {
 	return proofStoreToProof(proof)
 }
 
-func GetDAProofByRnd(rnd fr.Element) (DAProofInfo, error) {
+func GetDAProofBySubmitterAndRnd(submitter common.Address, rnd fr.Element) (DAProofInfo, error) {
 	var proof DAProofInfoStore
-	err := GlobalDataBase.Model(&DAProofInfoStore{}).Where("rnd = ?", rnd.String()).First(&proof).Error
+	err := GlobalDataBase.Model(&DAProofInfoStore{}).Where("submitter = ? AND rnd = ?", submitter.Hex(), rnd.String()).First(&proof).Error
 	if err != nil {
 		return DAProofInfo{}, err
 	}
 
 	return proofStoreToProof(proof)
+}
+
+func GetDAProofsByRnd(rnd fr.Element) ([]DAProofInfo, error) {
+	proofs := []DAProofInfoStore{}
+	err := GlobalDataBase.Model(&DAProofInfoStore{}).Where("rnd = ?", rnd.String()).Find(&proofs).Error
+	if err != nil {
+		return nil, err
+	}
+
+	proofsInfo := []DAProofInfo{}
+	for _, proof := range proofs {
+		proofInfo, err := proofStoreToProof(proof)
+		if err != nil {
+			return nil, err
+		}
+		proofsInfo = append(proofsInfo, proofInfo)
+	}
+
+	return proofsInfo, nil
+}
+
+func GetDAProofsBySubmitter(submitter common.Address) ([]DAProofInfo, error) {
+	proofs := []DAProofInfoStore{}
+	err := GlobalDataBase.Model(&DAProofInfoStore{}).Where("submitter = ?", submitter.Hex()).Find(&proofs).Error
+	if err != nil {
+		return nil, err
+	}
+
+	proofsInfo := []DAProofInfo{}
+	for _, proof := range proofs {
+		proofInfo, err := proofStoreToProof(proof)
+		if err != nil {
+			return nil, err
+		}
+		proofsInfo = append(proofsInfo, proofInfo)
+	}
+
+	return proofsInfo, nil
 }
 
 func proofStoreToProof(proof DAProofInfoStore) (DAProofInfo, error) {
@@ -101,11 +148,23 @@ func proofStoreToProof(proof DAProofInfoStore) (DAProofInfo, error) {
 		return DAProofInfo{}, err
 	}
 
+	last, ok := big.NewInt(0).SetString(proof.Last, 10)
+	if !ok {
+		return DAProofInfo{}, errors.New("big.NewInt(0).SetString(proof.Last, 10) failed")
+	}
+
+	profit, ok := big.NewInt(0).SetString(proof.Profit, 10)
+	if !ok {
+		return DAProofInfo{}, errors.New("big.NewInt(0).SetString(proof.Profit, 10) failed")
+	}
+
 	return DAProofInfo{
-		Rnd:     rnd,
-		Commits: commits,
-		Proof:   kzgProof,
-		Result:  proof.Result,
+		Submitter: common.HexToAddress(proof.Submitter),
+		Rnd:       rnd,
+		Commits:   commits,
+		Proof:     kzgProof,
+		Last:      last,
+		Profit:    profit,
 	}, nil
 }
 
