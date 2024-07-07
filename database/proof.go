@@ -40,7 +40,7 @@ func (p *DAProofInfo) CreateDAProofInfo() error {
 		Submitter:    p.Submitter.Hex(),
 		Rnd:          p.Rnd.String(),
 		Commits:      p.Commits.X.String() + " | " + p.Commits.Y.String(),
-		H:            p.Proof.H.X.String() + " | " + p.Commits.Y.String(),
+		H:            p.Proof.H.X.String() + " | " + p.Proof.H.Y.String(),
 		ClaimedValue: p.Proof.ClaimedValue.String(),
 		Last:         p.Last.String(),
 		Profit:       p.Profit.String(),
@@ -160,11 +160,11 @@ func proofStoreToProof(proof DAProofInfoStore) (DAProofInfo, error) {
 
 	return DAProofInfo{
 		Submitter: common.HexToAddress(proof.Submitter),
-		Rnd:     rnd,
-		Commits: commits,
-		Proof:   kzgProof,
-		Last: last,
-		Profit: profit,
+		Rnd:       rnd,
+		Commits:   commits,
+		Proof:     kzgProof,
+		Last:      last,
+		Profit:    profit,
 	}, nil
 }
 

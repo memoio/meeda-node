@@ -149,6 +149,9 @@ func (c *DataAvailabilityChallenger) ChallengeAggregatedCommits(ctx context.Cont
 		c.lastRnd = proofs[0].Rnd
 
 		for _, proof := range proofs {
+			if proof.Submitter==userAddr {
+				continue
+			}
 			err = kzg.Verify(&proof.Commits, &proof.Proof, proof.Rnd, c.verifyKey)
 			if err != nil {
 				logger.Info("Submitted proof is wrong, so we start chanllenge. Submitter:", proof.Submitter.Hex(), " Cycle:", time.Unix(proof.Last.Int64(), 0).Format("2006-01-02 15:04:05"))

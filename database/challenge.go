@@ -168,15 +168,13 @@ func GetPenaltyByAccount(account common.Address, accountType uint8) ([]DAPenalty
 	}
 
 	penaltiesInfo := []DAPenaltyInfo{}
-	var ok bool
-	bigNum, toValue, fValue := new(big.Int), new(big.Int), new(big.Int)
 
 	for _, penaltyInfoStore := range penalties {
-		toValue, ok = bigNum.SetString(penaltyInfoStore.RewardValue, 10)
+		toValue, ok := new(big.Int).SetString(penaltyInfoStore.RewardValue, 10)
 		if !ok {
 			return nil, errors.New("bigNum.SetString(penaltyInfoStore.RewardValue, 10) fail")
 		}
-		fValue, ok = bigNum.SetString(penaltyInfoStore.FoundationValue, 10)
+		fValue, ok := new(big.Int).SetString(penaltyInfoStore.FoundationValue, 10)
 		if !ok {
 			return nil, errors.New("bigNum.SetString(penaltyInfoStore.FoundationValue, 10) fail")
 		}
