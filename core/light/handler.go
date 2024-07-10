@@ -119,19 +119,6 @@ func putObjectHandler(c *gin.Context) {
 		return
 	}
 
-	// 记录commit => mid的映射
-	var fileInfo = database.DAFileIDInfo{
-		Commit: commit,
-		Mid:    result.Mid,
-	}
-	err = fileInfo.CreateDAFileIDInfo()
-	if err != nil {
-		errRes := logs.ToAPIErrorCode(err)
-		logger.Error(err)
-		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
-		return
-	}
-
 	commitBytes := commit.Bytes()
 	c.JSON(http.StatusOK, gin.H{
 		"id": hex.EncodeToString(commitBytes[:]),

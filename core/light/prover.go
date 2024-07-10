@@ -3,6 +3,7 @@ package light
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -216,11 +217,8 @@ func (p *DataAvailabilityProver) selectFiles(rnd fr.Element) ([]bls12381.G1Affin
 		}
 
 		if file.Expiration > p.last {
-			id, err := database.GetFileIDInfoByCommit(file.Commit)
-			if err != nil {
-				return nil, nil, err
-			}
-			data, _, err := getObjectFromStoreNode(baseUrl, id.Mid)
+			commitByte := file.Commit.Bytes()
+			data, _, err := getObjectFromStoreNode(baseUrl, hex.EncodeToString(commitByte[:]))
 			if err != nil {
 				return nil, nil, errors.New(err.Error())
 			}
