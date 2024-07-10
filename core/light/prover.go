@@ -27,8 +27,8 @@ type DataAvailabilityProver struct {
 	last               int64
 }
 
-func NewDataAvailabilityProver(chain string, sk *ecdsa.PrivateKey) (*DataAvailabilityProver, error) {
-	instance, err := proof.NewProofInstance(sk, chain)
+func NewDataAvailabilityProver(chain string, sk *ecdsa.PrivateKey, addrs *proof.ContractAddress) (*DataAvailabilityProver, error) {
+	instance, err := proof.NewProofInstance(sk, chain, addrs)
 	if err != nil {
 		return nil, err
 	}

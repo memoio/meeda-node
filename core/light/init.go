@@ -21,7 +21,7 @@ var userAddr common.Address
 var proofInstance *proof.ProofInstance
 var DefaultSRS *kzg.SRS
 
-func InitLightNode(chain string, sk *ecdsa.PrivateKey, ip string) error {
+func InitLightNode(chain string, sk *ecdsa.PrivateKey, ip string, addrs *proof.ContractAddress) error {
 	userSk = sk
 	userAddr = crypto.PubkeyToAddress(userSk.PublicKey)
 
@@ -33,7 +33,7 @@ func InitLightNode(chain string, sk *ecdsa.PrivateKey, ip string) error {
 	zeroProof.H.Y.SetZero()
 
 	var err error
-	proofInstance, err = proof.NewProofInstance(userSk, chain)
+	proofInstance, err = proof.NewProofInstance(userSk, chain, addrs)
 	if err != nil {
 		return err
 	}

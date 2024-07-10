@@ -9,12 +9,10 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	com "github.com/memoio/contractsv2/common"
-	inst "github.com/memoio/contractsv2/go_contracts/instance"
 	proxyfileproof "github.com/memoio/did-solidity/go-contracts/proxy-proof"
 	proof "github.com/memoio/go-did/file-proof"
 	"github.com/memoio/meeda-node/database"
@@ -38,39 +36,17 @@ type Dumper struct {
 	indexedMap   map[common.Hash]abi.Arguments
 }
 
-func NewDataAvailabilityDumper(chain string) (dumper *Dumper, err error) {
+func NewDataAvailabilityDumper(chain string, addrs *proof.ContractAddress) (dumper *Dumper, err error) {
 	dumper = &Dumper{
 		// store:        store,
 		eventNameMap: make(map[common.Hash]string),
 		indexedMap:   make(map[common.Hash]abi.Arguments),
 	}
 
-	instanceAddr, endpoint := com.GetInsEndPointByChain(chain)
+	_, endpoint := com.GetInsEndPointByChain(chain)
 	dumper.endpoint = endpoint
 
-	client, err := ethclient.DialContext(context.TODO(), endpoint)
-	if err != nil {
-		return dumper, err
-	}
-	defer client.Close()
-
-	// new instanceIns
-	instanceIns, err := inst.NewInstance(instanceAddr, client)
-	if err != nil {
-		return dumper, err
-	}
-
-	fileProofAddr, err := instanceIns.Instances(&bind.CallOpts{}, com.TypeFileProof)
-	if err != nil {
-		return dumper, err
-	}
-
-	fileProofPledgeAddr, err := instanceIns.Instances(&bind.CallOpts{}, com.TypeFileProofPledge)
-	if err != nil {
-		return dumper, err
-	}
-
-	dumper.contractAddress = []common.Address{fileProofAddr, fileProofPledgeAddr}
+	dumper.contractAddress = []common.Address{addrs.ProofAddr, addrs.PledgeAddr}
 
 	fpContractABI, err := abi.JSON(strings.NewReader(proxyfileproof.IFileProofABI))
 	if err != nil {

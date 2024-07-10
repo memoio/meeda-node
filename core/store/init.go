@@ -24,7 +24,7 @@ var defaultDABucket string = "da-bucket"
 var defaultDAObject string = "da-txdata"
 var defaultExpiration time.Duration = 7 * 24 * time.Hour
 
-func InitStoreNode(chain string, sk *ecdsa.PrivateKey, api, token string) error {
+func InitStoreNode(chain string, sk *ecdsa.PrivateKey, api, token string, addrs *proof.ContractAddress) error {
 	if api == "" {
 		store, err := gateway.NewGateway()
 		if err != nil {
@@ -57,6 +57,6 @@ func InitStoreNode(chain string, sk *ecdsa.PrivateKey, api, token string) error 
 	zeroProof.H.Y.SetZero()
 
 	submitterSk = sk
-	defaultProofInstance, err = proof.NewProofInstance(sk, chain)
+	defaultProofInstance, err = proof.NewProofInstance(sk, chain, addrs)
 	return err
 }
