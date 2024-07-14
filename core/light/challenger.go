@@ -9,18 +9,15 @@ import (
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr/kzg"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	com "github.com/memoio/contractsv2/common"
-	inst "github.com/memoio/contractsv2/go_contracts/instance"
 	proof "github.com/memoio/go-did/file-proof"
 	"github.com/memoio/meeda-node/database"
 )
 
 type DataAvailabilityChallenger struct {
 	endpoint           string
-	proofProxyAddr     common.Address
 	proofInstance      proof.ProofInstance
 	verifyKey          kzg.VerifyingKey
 	selectedFileNumber int64
@@ -32,27 +29,15 @@ type DataAvailabilityChallenger struct {
 	lastRnd    fr.Element
 }
 
-func NewDataAvailabilityChallenger(chain string, sk *ecdsa.PrivateKey, addrs *proof.ContractAddress) (*DataAvailabilityChallenger, error) {
-	instanceAddr, endpoint := com.GetInsEndPointByChain(chain)
+func NewDataAvailabilityChallenger(chain string, sk *ecdsa.PrivateKey) (*DataAvailabilityChallenger, error) {
+	_, endpoint := com.GetInsEndPointByChain(chain)
 	client, err := ethclient.DialContext(context.TODO(), endpoint)
 	if err != nil {
 		return nil, err
 	}
 	defer client.Close()
 
-	// new instance
-	instanceIns, err := inst.NewInstance(instanceAddr, client)
-	if err != nil {
-		return nil, err
-	}
-
-	// get proof proxy address
-	proofProxyAddr, err := instanceIns.Instances(&bind.CallOpts{}, com.TypeFileProofProxy)
-	if err != nil {
-		return nil, err
-	}
-
-	instance, err := proof.NewProofInstance(sk, chain, addrs)
+	instance, err := proof.NewProofInstance(sk, chain)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +49,6 @@ func NewDataAvailabilityChallenger(chain string, sk *ecdsa.PrivateKey, addrs *pr
 
 	return &DataAvailabilityChallenger{
 		endpoint:           endpoint,
-		proofProxyAddr:     proofProxyAddr,
 		proofInstance:      *instance,
 		verifyKey:          DefaultSRS.Vk,
 		selectedFileNumber: int64(info.ChalSum),
@@ -82,11 +66,6 @@ func (c *DataAvailabilityChallenger) ChallengeAggregatedCommits(ctx context.Cont
 		case <-ctx.Done():
 			return
 		case <-time.After(5 * time.Second):
-		}
-		err := c.proofInstance.GenerateRnd()
-		if err != nil {
-			logger.Error(err.Error())
-			continue
 		}
 		lastTime, err := c.proofInstance.GetLast()
 		if err != nil {

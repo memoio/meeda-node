@@ -61,17 +61,17 @@ func (p *DataAvailabilityProver) ProveDataAccess(ctx context.Context) {
 			return
 		case <-time.After(5 * time.Second):
 		}
-		err := p.proofInstance.GenerateRnd()
-		if err != nil {
-			logger.Error(err.Error())
-			continue
-		}
 		lastTime, err := p.proofInstance.GetLast()
 		if err != nil {
 			logger.Error(err.Error())
 			continue
 		}
 		p.last = lastTime.Int64()
+	}
+
+	err := p.proofInstance.GenerateRnd()
+	if err != nil {
+		logger.Error("GenerateRnd err:", err.Error())
 	}
 
 	for {

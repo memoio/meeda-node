@@ -132,6 +132,7 @@ var lightNodeRunCmd = &cli.Command{
 		err = prover.RegisterSubmitter()
 		if err != nil {
 			log.Fatalf("register submitter err: %s\n", err)
+			return err
 		}
 		err = prover.Pledge()
 		if err != nil {
