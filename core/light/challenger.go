@@ -29,7 +29,7 @@ type DataAvailabilityChallenger struct {
 	lastRnd    fr.Element
 }
 
-func NewDataAvailabilityChallenger(chain string, sk *ecdsa.PrivateKey) (*DataAvailabilityChallenger, error) {
+func NewDataAvailabilityChallenger(chain string, sk *ecdsa.PrivateKey, addrs *proof.ContractAddress) (*DataAvailabilityChallenger, error) {
 	_, endpoint := com.GetInsEndPointByChain(chain)
 	client, err := ethclient.DialContext(context.TODO(), endpoint)
 	if err != nil {
@@ -37,7 +37,7 @@ func NewDataAvailabilityChallenger(chain string, sk *ecdsa.PrivateKey) (*DataAva
 	}
 	defer client.Close()
 
-	instance, err := proof.NewProofInstance(sk, chain)
+	instance, err := proof.NewProofInstance(sk, chain, addrs)
 	if err != nil {
 		return nil, err
 	}
