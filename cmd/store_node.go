@@ -8,8 +8,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
+	proof "github.com/memoio/go-did/file-proof"
 	"github.com/memoio/meeda-node/core"
 	"github.com/memoio/meeda-node/core/store"
 	"github.com/memoio/meeda-node/database"
@@ -55,6 +57,26 @@ var storeNodeRunCmd = &cli.Command{
 			Usage: "input mefs user's token",
 			Value: "",
 		},
+		&cli.StringFlag{
+			Name:  "pledge",
+			Usage: "input pledge contract address",
+			Value: "",
+		},
+		&cli.StringFlag{
+			Name:  "fileproof",
+			Usage: "input fileproof contract address",
+			Value: "",
+		},
+		&cli.StringFlag{
+			Name:  "proofcontrol",
+			Usage: "input proofControl contract address",
+			Value: "",
+		},
+		&cli.StringFlag{
+			Name:  "proofproxy",
+			Usage: "input proofProxy contract address",
+			Value: "",
+		},
 	},
 	Action: func(ctx *cli.Context) error {
 		endPoint := ctx.String("endpoint")
@@ -62,6 +84,11 @@ var storeNodeRunCmd = &cli.Command{
 		chain := ctx.String("chain")
 		ip := ctx.String("ip")
 		token := ctx.String("token")
+
+		pledge := ctx.String("pledge")
+		fileproof := ctx.String("fileproof")
+		proofControl := ctx.String("proofcontrol")
+		proofProxy := ctx.String("proofproxy")
 
 		privateKey, err := crypto.HexToECDSA(sk)
 		if err != nil {
@@ -71,10 +98,17 @@ var storeNodeRunCmd = &cli.Command{
 			}
 		}
 
+		addrs := &proof.ContractAddress{
+			PledgeAddr:       common.HexToAddress(pledge),
+			ProofAddr:        common.HexToAddress(fileproof),
+			ProofControlAddr: common.HexToAddress(proofControl),
+			ProofProxyAddr:   common.HexToAddress(proofProxy),
+		}
+
 		cctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		err = store.InitStoreNode(chain, privateKey, ip, token)
+		err = store.InitStoreNode(chain, privateKey, ip, token, addrs)
 		if err != nil {
 			return err
 		}
@@ -83,7 +117,7 @@ var storeNodeRunCmd = &cli.Command{
 			return err
 		}
 
-		dumper, err := core.NewDataAvailabilityDumper(chain)
+		dumper, err := core.NewDataAvailabilityDumper(chain, addrs)
 		if err != nil {
 			return err
 		}
@@ -94,7 +128,7 @@ var storeNodeRunCmd = &cli.Command{
 		}
 		go dumper.SubscribeFileProof(cctx)
 
-		prover, err := store.NewDataAvailabilityProver(chain, privateKey)
+		prover, err := store.NewDataAvailabilityProver(chain, privateKey, addrs)
 		if err != nil {
 			log.Fatalf("new store node prover: %s\n", err)
 		}

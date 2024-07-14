@@ -29,8 +29,8 @@ type DataAvailabilityProver struct {
 	last               int64
 }
 
-func NewDataAvailabilityProver(chain string, sk *ecdsa.PrivateKey) (*DataAvailabilityProver, error) {
-	instance, err := proof.NewProofInstance(sk, chain)
+func NewDataAvailabilityProver(chain string, sk *ecdsa.PrivateKey, addrs *proof.ContractAddress) (*DataAvailabilityProver, error) {
+	instance, err := proof.NewProofInstance(sk, chain, addrs)
 	if err != nil {
 		return nil, err
 	}
@@ -68,17 +68,17 @@ func (p *DataAvailabilityProver) ProveDataAccess(ctx context.Context) {
 			return
 		case <-time.After(5 * time.Second):
 		}
-		err := p.proofInstance.GenerateRnd()
-		if err != nil {
-			logger.Error(err.Error())
-			continue
-		}
 		lastTime, err := p.proofInstance.GetLast()
 		if err != nil {
 			logger.Error(err.Error())
 			continue
 		}
 		p.last = lastTime.Int64()
+	}
+
+	err := p.proofInstance.GenerateRnd()
+	if err != nil {
+		logger.Error("GenerateRnd err:", err.Error())
 	}
 
 	for {

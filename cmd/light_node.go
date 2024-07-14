@@ -17,6 +17,7 @@ import (
 	"github.com/memoio/meeda-node/core/light"
 	"github.com/memoio/meeda-node/database"
 	"github.com/urfave/cli/v2"
+	proof "github.com/memoio/go-did/file-proof"
 )
 
 var LightNodeCmd = &cli.Command{
@@ -54,12 +55,37 @@ var lightNodeRunCmd = &cli.Command{
 			Usage: "input meeda store node's ip address",
 			Value: "http://183.240.197.189:38082",
 		},
+		&cli.StringFlag{
+			Name:  "pledge",
+			Usage: "input pledge contract address",
+			Value: "",
+		},
+		&cli.StringFlag{
+			Name:  "fileproof",
+			Usage: "input fileproof contract address",
+			Value: "",
+		},
+		&cli.StringFlag{
+			Name:  "proofcontrol",
+			Usage: "input proofControl contract address",
+			Value: "",
+		},
+		&cli.StringFlag{
+			Name:  "proofproxy",
+			Usage: "input proofProxy contract address",
+			Value: "",
+		},
 	},
 	Action: func(ctx *cli.Context) error {
 		endPoint := ctx.String("endpoint")
 		sk := ctx.String("sk")
 		chain := ctx.String("chain")
 		ip := ctx.String("ip")
+
+		pledge := ctx.String("pledge")
+		fileproof := ctx.String("fileproof")
+		proofControl := ctx.String("proofcontrol")
+		proofProxy := ctx.String("proofproxy")
 
 		privateKey, err := crypto.HexToECDSA(sk)
 		if err != nil {
@@ -69,10 +95,17 @@ var lightNodeRunCmd = &cli.Command{
 			}
 		}
 
+		addrs := &proof.ContractAddress{
+			PledgeAddr: common.HexToAddress(pledge),
+			ProofAddr: common.HexToAddress(fileproof),
+			ProofControlAddr: common.HexToAddress(proofControl),
+			ProofProxyAddr: common.HexToAddress(proofProxy),
+		}
+
 		cctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		err = light.InitLightNode(chain, privateKey, ip)
+		err = light.InitLightNode(chain, privateKey, ip, addrs)
 		if err != nil {
 			return err
 		}
@@ -81,7 +114,7 @@ var lightNodeRunCmd = &cli.Command{
 			return err
 		}
 
-		dumper, err := core.NewDataAvailabilityDumper(chain)
+		dumper, err := core.NewDataAvailabilityDumper(chain, addrs)
 		if err != nil {
 			return err
 		}
@@ -92,13 +125,14 @@ var lightNodeRunCmd = &cli.Command{
 		}
 		go dumper.SubscribeFileProof(cctx)
 
-		prover, err := light.NewDataAvailabilityProver(chain, privateKey)
+		prover, err := light.NewDataAvailabilityProver(chain, privateKey, addrs)
 		if err != nil {
 			log.Fatalf("new light node prover: %s\n", err)
 		}
 		err = prover.RegisterSubmitter()
 		if err != nil {
 			log.Fatalf("register submitter err: %s\n", err)
+			return err
 		}
 		err = prover.Pledge()
 		if err != nil {
@@ -106,7 +140,7 @@ var lightNodeRunCmd = &cli.Command{
 		}
 		go prover.ProveDataAccess(cctx)
 
-		challenger, err := light.NewDataAvailabilityChallenger(chain, privateKey)
+		challenger, err := light.NewDataAvailabilityChallenger(chain, privateKey, addrs)
 		if err != nil {
 			return err
 		}
