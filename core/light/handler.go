@@ -37,11 +37,19 @@ func getObjectHandler(c *gin.Context) {
 		return
 	}
 
-	data, status, err := getObjectFromStoreNode(baseUrl, id)
+	var data []byte
+	var status int
+	var err error
+	data, _, err = getObjectFromStoreNode(baseUrl, id)
 	if err != nil {
 		logger.Error(err)
-		c.AbortWithStatusJSON(status, err.Error())
-		return
+		logger.Info("Get data from the old meeda-store node...")
+		data, status, err = getObjectFromStoreNode(oldStoreNodeUrl, id)
+		if err != nil {
+			logger.Error(err)
+			c.AbortWithStatusJSON(status, err.Error())
+			return
+		}
 	}
 
 	c.Data(http.StatusOK, utils.TypeByExtension(""), data)
