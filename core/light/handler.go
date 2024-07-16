@@ -89,9 +89,10 @@ func putObjectHandler(c *gin.Context) {
 	_, err = database.GetFileInfoByCommit(commit)
 	if err == nil {
 		commitBytes := commit.Bytes()
-		logger.Infof("%s is already exist, so we returned", hex.EncodeToString(commitBytes[:]))
+		commitHex := hex.EncodeToString(commitBytes[:])
+		logger.Infof("%s is already exist, so we returned", commitHex)
 		c.JSON(http.StatusOK, gin.H{
-			"id": hex.EncodeToString(commitBytes[:]),
+			"id": commitHex,
 		})
 		return
 	}
