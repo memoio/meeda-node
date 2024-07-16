@@ -56,6 +56,11 @@ var lightNodeRunCmd = &cli.Command{
 			Value: "http://183.240.197.189:38082",
 		},
 		&cli.StringFlag{
+			Name:  "oldip",
+			Usage: "input the old meeda store node's ip address",
+			Value: "",
+		},
+		&cli.StringFlag{
 			Name:  "pledge",
 			Usage: "input pledge contract address",
 			Value: "",
@@ -81,6 +86,7 @@ var lightNodeRunCmd = &cli.Command{
 		sk := ctx.String("sk")
 		chain := ctx.String("chain")
 		ip := ctx.String("ip")
+		oldip := ctx.String("oldip")
 
 		pledge := ctx.String("pledge")
 		fileproof := ctx.String("fileproof")
@@ -105,7 +111,7 @@ var lightNodeRunCmd = &cli.Command{
 		cctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		err = light.InitLightNode(chain, privateKey, ip, addrs)
+		err = light.InitLightNode(chain, privateKey, ip, oldip, addrs)
 		if err != nil {
 			return err
 		}

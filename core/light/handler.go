@@ -37,11 +37,19 @@ func getObjectHandler(c *gin.Context) {
 		return
 	}
 
-	data, status, err := getObjectFromStoreNode(baseUrl, id)
+	var data []byte
+	var status int
+	var err error
+	data, _, err = getObjectFromStoreNode(baseUrl, id)
 	if err != nil {
 		logger.Error(err)
-		c.AbortWithStatusJSON(status, err.Error())
-		return
+		logger.Info("Get data from the old meeda-store node...")
+		data, status, err = getObjectFromStoreNode(oldStoreNodeUrl, id)
+		if err != nil {
+			logger.Error(err)
+			c.AbortWithStatusJSON(status, err.Error())
+			return
+		}
 	}
 
 	c.Data(http.StatusOK, utils.TypeByExtension(""), data)
@@ -81,9 +89,10 @@ func putObjectHandler(c *gin.Context) {
 	_, err = database.GetFileInfoByCommit(commit)
 	if err == nil {
 		commitBytes := commit.Bytes()
-		logger.Infof("%s is already exist, so we returned", hex.EncodeToString(commitBytes[:]))
+		commitHex := hex.EncodeToString(commitBytes[:])
+		logger.Infof("%s is already exist, so we returned", commitHex)
 		c.JSON(http.StatusOK, gin.H{
-			"id": hex.EncodeToString(commitBytes[:]),
+			"id": commitHex,
 		})
 		return
 	}

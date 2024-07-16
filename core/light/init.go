@@ -13,6 +13,7 @@ import (
 )
 
 var baseUrl string
+var oldStoreNodeUrl string
 var logger = logs.Logger("light node")
 var zeroCommit bls12381.G1Affine
 var zeroProof kzg.OpeningProof
@@ -21,7 +22,7 @@ var userAddr common.Address
 var proofInstance *proof.ProofInstance
 var DefaultSRS *kzg.SRS
 
-func InitLightNode(chain string, sk *ecdsa.PrivateKey, ip string, addrs *proof.ContractAddress) error {
+func InitLightNode(chain string, sk *ecdsa.PrivateKey, ip, oldip string, addrs *proof.ContractAddress) error {
 	userSk = sk
 	userAddr = crypto.PubkeyToAddress(userSk.PublicKey)
 
@@ -49,6 +50,7 @@ func InitLightNode(chain string, sk *ecdsa.PrivateKey, ip string, addrs *proof.C
 	}
 
 	baseUrl = ip
+	oldStoreNodeUrl = oldip
 
 	return nil
 }

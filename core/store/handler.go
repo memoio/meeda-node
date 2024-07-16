@@ -116,9 +116,12 @@ func putObjectHandler(c *gin.Context) {
 	// check data is uploaded to meeda
 	_, err = database.GetFileInfoByCommit(commit)
 	if err == nil {
-		errRes := logs.ToAPIErrorCode(logs.ErrAlreadyExist)
-		logger.Error(logs.ErrAlreadyExist)
-		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
+		commitBytes := commit.Bytes()
+		commitHex := hex.EncodeToString(commitBytes[:])
+		logger.Infof("%s is already exist, so we returned", commitHex)
+		c.JSON(http.StatusOK, gin.H{
+			"id": commitHex,
+		})
 		return
 	}
 
