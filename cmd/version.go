@@ -6,7 +6,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var Version = "2.0.0"
+var Version = "2.0.2"
 
 var BuildFlag string
 

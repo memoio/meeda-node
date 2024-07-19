@@ -155,7 +155,7 @@ func putObjectHandler(c *gin.Context) {
 		Mid:    mid,
 	}
 	err = fileInfo.CreateDAFileIDInfo()
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "UNIQUE constraint failed") {
 		errRes := logs.ToAPIErrorCode(err)
 		logger.Error(err)
 		c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
