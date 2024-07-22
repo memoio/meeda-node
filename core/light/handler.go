@@ -86,10 +86,10 @@ func putObjectHandler(c *gin.Context) {
 	}
 
 	// check data is uploaded to meeda
+	commitBytes := commit.Bytes()
+	commitHex := hex.EncodeToString(commitBytes[:])
 	_, err = database.GetFileInfoByCommit(commit)
 	if err == nil {
-		commitBytes := commit.Bytes()
-		commitHex := hex.EncodeToString(commitBytes[:])
 		logger.Infof("%s is already exist, so we returned", commitHex)
 		c.JSON(http.StatusOK, gin.H{
 			"id": commitHex,
@@ -97,20 +97,14 @@ func putObjectHandler(c *gin.Context) {
 		return
 	}
 
+	logger.Infof("begin put object %s to store node", commitHex)
+
 	result, status, err := putObjectIntoStoreNode(baseUrl, databyte, userAddr.String())
 	if err != nil {
 		logger.Error(err)
 		c.AbortWithStatusJSON(status, err.Error())
 		return
 	}
-
-	// decodeCommit, err := decodeCommit(result.Commit)
-	// if err != nil {
-	// 	errRes := logs.ToAPIErrorCode(err)
-	// 	logger.Error(err)
-	// 	c.AbortWithStatusJSON(errRes.HTTPStatusCode, errRes)
-	// 	return
-	// }
 
 	signature, err := hex.DecodeString(result.Signature)
 	if err != nil {
@@ -120,6 +114,8 @@ func putObjectHandler(c *gin.Context) {
 		return
 	}
 
+	logger.Infof("begin AddFile %s", commitHex)
+
 	err = proofInstance.AddFile(commit, uint64(result.Size), big.NewInt(result.Start), big.NewInt(result.End), signature)
 	if err != nil {
 		errRes := logs.ToAPIErrorCode(err)
@@ -128,9 +124,8 @@ func putObjectHandler(c *gin.Context) {
 		return
 	}
 
-	commitBytes := commit.Bytes()
 	c.JSON(http.StatusOK, gin.H{
-		"id": hex.EncodeToString(commitBytes[:]),
+		"id": commitHex,
 	})
 }
 
@@ -235,7 +230,7 @@ type PutObjectResult struct {
 }
 
 func putObjectIntoStoreNode(url string, data []byte, from string) (PutObjectResult, int, error) {
-	client := &http.Client{Timeout: time.Minute}
+	client := &http.Client{Timeout: 2 * time.Minute}
 	url = url + "/putObject"
 
 	var payload = make(map[string]string)
