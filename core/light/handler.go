@@ -97,6 +97,16 @@ func putObjectHandler(c *gin.Context) {
 		return
 	}
 
+	// check data commitment is uploaded to chain
+	_, expiration, err := proofInstance.GetFileInfo(commit)
+	if err == nil && expiration.Cmp(big.NewInt(0))>0 {
+		logger.Infof("%s is already exist, so we returned", commitHex)
+		c.JSON(http.StatusOK, gin.H{
+			"id": commitHex,
+		})
+		return
+	}
+
 	logger.Infof("begin put object %s to store node", commitHex)
 
 	result, status, err := putObjectIntoStoreNode(baseUrl, databyte, userAddr.String())
