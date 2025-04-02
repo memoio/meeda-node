@@ -46,7 +46,7 @@ func getObjectHandler(c *gin.Context) {
 			return
 		}
 
-		// check if it is submite to contract
+		// check if it is submited to contract
 		file, err := database.GetFileInfoByCommit(commit)
 		if err != nil {
 			errRes := logs.ToAPIErrorCode(err)
